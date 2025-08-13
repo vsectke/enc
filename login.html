@@ -350,26 +350,29 @@
         }
         
         // Handle force change password
-        document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const currentPassword = document.getElementById('currentPassword').value;
-            const newPassword = document.getElementById('newPassword').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
-            
-            if (newPassword !== confirmPassword) {
-                alert('Mật khẩu xác nhận không khớp!');
-                return;
-            }
-            
-            try {
-                await authManager.changePassword(currentPassword, newPassword, confirmPassword);
-                alert('Đổi mật khẩu thành công!');
-                window.location.href = 'index.html';
-            } catch (error) {
-                alert('Lỗi: ' + error.message);
-            }
-        });
+document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const currentPassword = document.getElementById('currentPassword').value;
+    const newPassword = document.getElementById('newPassword').value;
+    const confirmPassword = document.getElementById('confirmPassword').value;
+    
+    if (newPassword !== confirmPassword) {
+        alert('Mật khẩu xác nhận không khớp!');
+        return;
+    }
+    
+    try {
+        await authManager.changePassword(currentPassword, newPassword, confirmPassword);
+        alert('Đổi mật khẩu thành công!');
+        
+        // ĐÂY LÀ DÒNG CẦN THÊM VÀO:
+        document.getElementById('changePasswordModal').classList.add('hidden');
+        window.location.href = 'index.html';
+    } catch (error) {
+        alert('Lỗi: ' + error.message);
+    }
+});
         
         // Auto-focus email field
         window.addEventListener('DOMContentLoaded', () => {
