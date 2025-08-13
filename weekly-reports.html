@@ -1,0 +1,1028 @@
+<!-- Weekly Reports Page -->
+<div class="space-y-6" x-data="weeklyReportsPage()">
+    <!-- Page Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Báo cáo tuần</h1>
+                <p class="text-gray-600 mt-1">Quản lý báo cáo công việc hàng tuần</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center space-x-3">
+                <!-- Week selector -->
+                <div class="flex items-center space-x-2">
+                    <button @click="previousWeek()" class="p-2 hover:bg-gray-100 rounded">
+                        <i class="lucide-chevron-left w-5 h-5"></i>
+                    </button>
+                    <div class="text-center">
+                        <p class="font-medium">Tuần <span x-text="selectedWeek"></span></p>
+                        <p class="text-sm text-gray-500" x-text="getWeekDateRange()"></p>
+                    </div>
+                    <button @click="nextWeek()" class="p-2 hover:bg-gray-100 rounded">
+                        <i class="lucide-chevron-right w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <!-- Actions -->
+                <button @click="createOrEditReport()" 
+                        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="lucide-file-plus w-4 h-4 mr-2"></i>
+                    <span x-text="currentReport ? 'Chỉnh sửa' : 'Tạo báo cáo'"></span>
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Report Status Card -->
+    <div x-show="currentReport" class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600">Trạng thái báo cáo</p>
+                <div class="mt-2 flex items-center space-x-4">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                          :class="getStatusColor(currentReport?.status)">
+                        <span x-text="wrStatusNames[currentReport?.status]"></span>
+                    </span>
+                    <span class="text-sm text-gray-600">
+                        Mã: <span class="font-mono font-medium" x-text="currentReport?.code"></span>
+                    </span>
+                    <span class="text-sm text-gray-600">
+                        Tổng giờ: <span class="font-medium" x-text="currentReport?.total_hours || 0"></span>h
+                    </span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <!-- Submit button (for draft) -->
+                <template x-if="currentReport?.status === 'draft' && isOwner()">
+                    <button @click="submitReport()" 
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        <i class="lucide-send w-4 h-4 inline mr-2"></i>
+                        Nộp báo cáo
+                    </button>
+                </template>
+                
+                <!-- Review button (for PM) -->
+                <template x-if="currentReport?.status === 'submitted' && canReview()">
+                    <button @click="showReviewModal()" 
+                            class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                        <i class="lucide-check-circle w-4 h-4 inline mr-2"></i>
+                        Review
+                    </button>
+                </template>
+                
+                <!-- Approve/Reject buttons (for Admin) -->
+                <template x-if="['submitted', 'pm_reviewed'].includes(currentReport?.status) && canApprove()">
+                    <div class="flex space-x-2">
+                        <button @click="approveReport()" 
+                                class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                            <i class="lucide-check w-4 h-4 inline mr-2"></i>
+                            Duyệt
+                        </button>
+                        <button @click="rejectReport()" 
+                                class="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+                            <i class="lucide-x w-4 h-4 inline mr-2"></i>
+                            Từ chối
+                        </button>
+                    </div>
+                </template>
+                
+                <!-- Export button -->
+                <button @click="exportReport()" 
+                        class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+                    <i class="lucide-download w-4 h-4 inline mr-2"></i>
+                    Xuất Excel
+                </button>
+            </div>
+        </div>
+        
+        <!-- Deadline warning -->
+        <div x-show="showDeadlineWarning()" class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <p class="text-sm text-yellow-800">
+                <i class="lucide-alert-triangle w-4 h-4 inline mr-1"></i>
+                Hạn nộp: <span x-text="formatDateTime(currentReport?.submit_deadline)"></span>
+            </p>
+        </div>
+        
+        <!-- Review/Approval info -->
+        <div x-show="currentReport?.pm_reviewed_at" class="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+            <p class="text-sm text-purple-800">
+                PM đã review: <span x-text="currentReport?.pm_reviewed_by?.full_name"></span> - 
+                <span x-text="formatDateTime(currentReport?.pm_reviewed_at)"></span>
+            </p>
+            <p x-show="currentReport?.pm_comment" class="text-sm mt-1" x-text="currentReport?.pm_comment"></p>
+        </div>
+        
+        <div x-show="currentReport?.approved_at" class="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+            <p class="text-sm text-green-800">
+                Đã duyệt: <span x-text="currentReport?.approved_by?.full_name"></span> - 
+                <span x-text="formatDateTime(currentReport?.approved_at)"></span>
+            </p>
+            <p x-show="currentReport?.approval_note" class="text-sm mt-1" x-text="currentReport?.approval_note"></p>
+        </div>
+        
+        <div x-show="currentReport?.rejection_reason" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p class="text-sm text-red-800">
+                Lý do từ chối: <span x-text="currentReport?.rejection_reason"></span>
+            </p>
+        </div>
+    </div>
+    
+    <!-- Report Items -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="p-6 border-b flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Chi tiết báo cáo</h3>
+            
+            <!-- Add Item button (for draft status) -->
+            <div x-show="currentReport?.status === 'draft' && isOwner()" class="flex space-x-2">
+                <button @click="importFromPlan()" 
+                        class="px-3 py-1.5 bg-purple-600 text-white text-sm rounded hover:bg-purple-700">
+                    <i class="lucide-import w-4 h-4 inline mr-1"></i>
+                    Import từ kế hoạch
+                </button>
+                <button @click="showAddItemModal()" 
+                        class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                    <i class="lucide-plus w-4 h-4 inline mr-1"></i>
+                    Thêm công việc
+                </button>
+            </div>
+        </div>
+        
+        <!-- Items Table -->
+        <div x-show="reportItems.length > 0" class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Công việc
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Hợp đồng
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Giờ làm
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Mô tả công việc
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Vướng mắc
+                        </th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Thao tác
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="item in reportItems" :key="item.id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                                <div>
+                                    <!-- Existing task -->
+                                    <template x-if="item.task_id">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-900" x-text="item.task?.title"></p>
+                                            <p class="text-xs text-gray-500">Task ID: <span x-text="item.task_id.slice(0,8)"></span></p>
+                                        </div>
+                                    </template>
+                                    
+                                    <!-- Proposed task -->
+                                    <template x-if="!item.task_id && item.propose_task_title">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-900">
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 mr-2">
+                                                    Đề xuất
+                                                </span>
+                                                <span x-text="item.propose_task_title"></span>
+                                            </p>
+                                            <template x-if="item.created_task_id">
+                                                <p class="text-xs text-green-600 mt-1">
+                                                    <i class="lucide-check-circle w-3 h-3 inline"></i>
+                                                    Đã được duyệt và tạo task
+                                                </p>
+                                            </template>
+                                            <template x-if="!item.created_task_id && canApproveProposal()">
+                                                <button @click="approveProposedTask(item.id)" 
+                                                        class="mt-1 text-xs text-blue-600 hover:text-blue-800">
+                                                    <i class="lucide-check w-3 h-3 inline"></i>
+                                                    Duyệt đề xuất
+                                                </button>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-900" x-text="item.task?.project?.name || item.propose_project?.name || 'N/A'"></p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm font-medium text-gray-900"><span x-text="item.hours_spent"></span>h</p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-600 line-clamp-2" x-text="item.work_description || '-'"></p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-600 line-clamp-2" x-text="item.blockers || '-'"></p>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <template x-if="currentReport?.status === 'draft' && isOwner()">
+                                    <div class="flex items-center justify-center space-x-2">
+                                        <button @click="editItem(item)" class="text-blue-600 hover:text-blue-900">
+                                            <i class="lucide-edit w-4 h-4"></i>
+                                        </button>
+                                        <button @click="deleteItem(item.id)" class="text-red-600 hover:text-red-900">
+                                            <i class="lucide-trash-2 w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Empty state -->
+        <div x-show="reportItems.length === 0" class="p-12 text-center">
+            <i class="lucide-inbox w-16 h-16 text-gray-300 mx-auto mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Chưa có nội dung báo cáo</h3>
+            <p class="text-gray-500">Thêm công việc đã thực hiện trong tuần</p>
+        </div>
+    </div>
+    
+    <!-- Other Reports (for PM/Admin) -->
+    <div x-show="otherReports.length > 0" class="bg-white shadow rounded-lg">
+        <div class="p-6 border-b">
+            <h3 class="text-lg font-medium text-gray-900">Báo cáo của team</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nhân viên</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mã báo cáo</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tổng giờ</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày nộp</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="report in otherReports" :key="report.id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                                <p class="text-sm font-medium text-gray-900" x-text="report.user?.full_name"></p>
+                                <p class="text-xs text-gray-500" x-text="report.user?.employee_code"></p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm font-mono" x-text="report.code"></p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                      :class="getStatusColor(report.status)">
+                                    <span x-text="wrStatusNames[report.status]"></span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-900"><span x-text="report.total_hours || 0"></span>h</p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-900" x-text="report.submitted_at ? formatDateTime(report.submitted_at) : '-'"></p>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <button @click="viewReport(report.id)" class="text-blue-600 hover:text-blue-900">
+                                    <i class="lucide-eye w-4 h-4"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Item Modal -->
+<div id="itemModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 id="itemModalTitle" class="text-lg font-medium text-gray-900">Thêm công việc</h3>
+            <button onclick="closeItemModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        
+        <form id="itemForm" class="space-y-4">
+            <input type="hidden" id="itemId">
+            
+            <!-- Task Type -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Loại công việc</label>
+                <div class="flex space-x-4">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="taskType" value="existing" checked
+                               onchange="toggleTaskType(this.value)"
+                               class="form-radio text-blue-600">
+                        <span class="ml-2">Task có sẵn</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="taskType" value="proposed"
+                               onchange="toggleTaskType(this.value)"
+                               class="form-radio text-blue-600">
+                        <span class="ml-2">Đề xuất task mới</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Existing Task Fields -->
+            <div id="existingTaskFields">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Chọn task *</label>
+                    <select id="itemTaskId" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="">Chọn task</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Proposed Task Fields -->
+            <div id="proposedTaskFields" class="hidden space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Hợp đồng *</label>
+                    <select id="itemProposeProjectId" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="">Chọn hợp đồng</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Tiêu đề task đề xuất *</label>
+                    <input type="text" id="itemProposeTitle" maxlength="500"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Giờ ước tính</label>
+                    <input type="number" id="itemProposeHours" min="0" step="0.5"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+            </div>
+            
+            <!-- Common Fields -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Số giờ thực hiện *</label>
+                <input type="number" id="itemHoursSpent" required min="0" step="0.5"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Mô tả công việc đã làm</label>
+                <textarea id="itemWorkDescription" rows="3"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Vướng mắc/Khó khăn</label>
+                <textarea id="itemBlockers" rows="2"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4">
+                <button type="button" onclick="closeItemModal()"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+                    Hủy
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <span id="itemSubmitText">Thêm</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Review Modal (for PM) -->
+<div id="reviewModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Review báo cáo</h3>
+            <button onclick="closeReviewModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        
+        <form id="reviewForm" class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Nhận xét của PM</label>
+                <textarea id="pmComment" rows="4"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
+                          placeholder="Nhập nhận xét về báo cáo..."></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <button type="button" onclick="closeReviewModal()"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+                    Hủy
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                    Xác nhận Review
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Alpine.js Weekly Reports Component
+function weeklyReportsPage() {
+    return {
+        selectedWeek: getWeekNumber(new Date()),
+        selectedYear: new Date().getFullYear(),
+        currentReport: null,
+        reportItems: [],
+        otherReports: [],
+        projects: [],
+        tasks: [],
+        wrStatusNames: CONFIG.WR_STATUS_NAMES,
+        
+        async init() {
+            await this.loadProjects();
+            await this.loadReport();
+            await this.loadOtherReports();
+        },
+        
+        async loadProjects() {
+            try {
+                const { data: projects } = await supabase
+                    .from('projects')
+                    .select('id, name, code')
+                    .eq('status', 'active')
+                    .is('deleted_at', null)
+                    .order('name');
+                
+                this.projects = projects || [];
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        },
+        
+        async loadReport() {
+            try {
+                // Load current user's report for selected week
+                const { data: report } = await supabase
+                    .from('weekly_reports')
+                    .select(`
+                        *,
+                        user:user_profiles!user_id(full_name, employee_code),
+                        pm_reviewed_by:user_profiles!pm_reviewed_by(full_name),
+                        approved_by:user_profiles!approved_by(full_name)
+                    `)
+                    .eq('user_id', currentUser.id)
+                    .eq('week_number', this.selectedWeek)
+                    .eq('year', this.selectedYear)
+                    .single();
+                
+                this.currentReport = report;
+                
+                if (report) {
+                    await this.loadReportItems(report.id);
+                } else {
+                    this.reportItems = [];
+                }
+                
+            } catch (error) {
+                console.error('Error loading report:', error);
+            }
+        },
+        
+        async loadReportItems(reportId) {
+            try {
+                const { data: items } = await supabase
+                    .from('weekly_report_items')
+                    .select(`
+                        *,
+                        task:tasks(
+                            id, title,
+                            project:projects(name, code)
+                        ),
+                        propose_project:projects!propose_project_id(name, code)
+                    `)
+                    .eq('report_id', reportId)
+                    .order('display_order');
+                
+                this.reportItems = items || [];
+            } catch (error) {
+                console.error('Error loading report items:', error);
+            }
+        },
+        
+        async loadOtherReports() {
+            // Load team reports for PM/Admin
+            if (!['pm', 'admin'].includes(currentUser.role)) return;
+            
+            try {
+                let query = supabase
+                    .from('weekly_reports')
+                    .select(`
+                        *,
+                        user:user_profiles!user_id(full_name, employee_code)
+                    `)
+                    .neq('user_id', currentUser.id)
+                    .eq('week_number', this.selectedWeek)
+                    .eq('year', this.selectedYear);
+                
+                // PM only sees their team's reports
+                if (currentUser.role === 'pm') {
+                    // Get team member IDs
+                    const { data: teamTasks } = await supabase
+                        .from('tasks')
+                        .select('assignee_id')
+                        .in('project_id', 
+                            supabase.from('projects')
+                                .select('id')
+                                .eq('pm_id', currentUser.id)
+                        );
+                    
+                    const teamIds = [...new Set(teamTasks?.map(t => t.assignee_id) || [])];
+                    if (teamIds.length > 0) {
+                        query = query.in('user_id', teamIds);
+                    }
+                }
+                
+                const { data: reports } = await query.order('created_at');
+                this.otherReports = reports || [];
+                
+            } catch (error) {
+                console.error('Error loading other reports:', error);
+            }
+        },
+        
+        async createOrEditReport() {
+            if (this.currentReport) {
+                // Already has report, just focus on adding items
+                showAddItemModal();
+            } else {
+                // Create new report
+                try {
+                    const code = `W_${String(this.selectedYear).slice(-2)}${String(this.selectedWeek).padStart(2, '0')}_${currentUser.employee_code}`;
+                    const deadline = getWeekDeadline(this.selectedWeek, this.selectedYear);
+                    
+                    const { data: report, error } = await supabase
+                        .from('weekly_reports')
+                        .insert({
+                            user_id: currentUser.id,
+                            week_number: this.selectedWeek,
+                            year: this.selectedYear,
+                            code: code,
+                            status: 'draft',
+                            submit_deadline: deadline.toISOString(),
+                            total_hours: 0
+                        })
+                        .select()
+                        .single();
+                    
+                    if (error) throw error;
+                    
+                    this.currentReport = report;
+                    showToast('Tạo báo cáo thành công', 'success');
+                    showAddItemModal();
+                    
+                } catch (error) {
+                    console.error('Error creating report:', error);
+                    showToast('Lỗi: ' + error.message, 'error');
+                }
+            }
+        },
+        
+        async submitReport() {
+            if (!confirm('Bạn có chắc chắn muốn nộp báo cáo? Sau khi nộp sẽ không thể chỉnh sửa.')) return;
+            
+            try {
+                // Check deadline
+                const deadline = new Date(this.currentReport.submit_deadline);
+                if (new Date() > deadline) {
+                    throw new Error('Đã quá hạn nộp báo cáo');
+                }
+                
+                // Check has items
+                if (this.reportItems.length === 0) {
+                    throw new Error('Báo cáo phải có ít nhất một công việc');
+                }
+                
+                // Calculate total hours
+                const totalHours = this.reportItems.reduce((sum, item) => sum + (item.hours_spent || 0), 0);
+                
+                // Submit via RPC
+                const { error } = await supabase.rpc('submit_weekly_report', {
+                    p_report_id: this.currentReport.id
+                });
+                
+                if (error) throw error;
+                
+                showToast('Nộp báo cáo thành công', 'success');
+                await this.loadReport();
+                
+            } catch (error) {
+                console.error('Error submitting report:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        async importFromPlan() {
+            if (!confirm('Import kế hoạch tuần trước vào báo cáo này?')) return;
+            
+            try {
+                const { data, error } = await supabase.rpc('import_weekly_plan_to_wr', {
+                    p_report_id: this.currentReport.id
+                });
+                
+                if (error) throw error;
+                
+                showToast(`Đã import ${data} công việc từ kế hoạch`, 'success');
+                await this.loadReportItems(this.currentReport.id);
+                
+            } catch (error) {
+                console.error('Error importing from plan:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        async deleteItem(itemId) {
+            if (!confirm('Xóa công việc này khỏi báo cáo?')) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('weekly_report_items')
+                    .delete()
+                    .eq('id', itemId);
+                
+                if (error) throw error;
+                
+                showToast('Đã xóa công việc', 'success');
+                await this.loadReportItems(this.currentReport.id);
+                
+            } catch (error) {
+                console.error('Error deleting item:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        editItem(item) {
+            window.editReportItem(item);
+        },
+        
+        async approveProposedTask(itemId) {
+            if (!confirm('Duyệt và tạo task từ đề xuất này?')) return;
+            
+            try {
+                const { data, error } = await supabase.rpc('approve_proposed_task', {
+                    p_item_id: itemId
+                });
+                
+                if (error) throw error;
+                
+                showToast('Đã duyệt và tạo task thành công', 'success');
+                await this.loadReportItems(this.currentReport.id);
+                
+            } catch (error) {
+                console.error('Error approving proposed task:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        async approveReport() {
+            const note = prompt('Nhập ghi chú duyệt (tùy chọn):');
+            
+            try {
+                const { error } = await supabase.rpc('approve_weekly_report', {
+                    p_report_id: this.currentReport.id,
+                    p_note: note || null
+                });
+                
+                if (error) throw error;
+                
+                showToast('Đã duyệt báo cáo', 'success');
+                await this.loadReport();
+                
+            } catch (error) {
+                console.error('Error approving report:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        async rejectReport() {
+            const reason = prompt('Nhập lý do từ chối:');
+            if (!reason) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('weekly_reports')
+                    .update({
+                        status: 'rejected',
+                        rejection_reason: reason
+                    })
+                    .eq('id', this.currentReport.id);
+                
+                if (error) throw error;
+                
+                showToast('Đã từ chối báo cáo', 'success');
+                await this.loadReport();
+                
+            } catch (error) {
+                console.error('Error rejecting report:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        viewReport(reportId) {
+            // Implement view other report
+            showToast('Tính năng đang phát triển', 'info');
+        },
+        
+        previousWeek() {
+            if (this.selectedWeek > 1) {
+                this.selectedWeek--;
+            } else {
+                this.selectedWeek = 52;
+                this.selectedYear--;
+            }
+            this.loadReport();
+            this.loadOtherReports();
+        },
+        
+        nextWeek() {
+            if (this.selectedWeek < 52) {
+                this.selectedWeek++;
+            } else {
+                this.selectedWeek = 1;
+                this.selectedYear++;
+            }
+            this.loadReport();
+            this.loadOtherReports();
+        },
+        
+        getWeekDateRange() {
+            const jan1 = new Date(this.selectedYear, 0, 1);
+            const daysToAdd = (this.selectedWeek - 1) * 7;
+            const weekStart = new Date(jan1.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+            
+            // Adjust to Monday
+            const day = weekStart.getDay();
+            const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
+            weekStart.setDate(diff);
+            
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            
+            return `${formatDate(weekStart)} - ${formatDate(weekEnd)}`;
+        },
+        
+        getStatusColor(status) {
+            return STATUS_COLORS[status] || 'bg-gray-100 text-gray-800';
+        },
+        
+        isOwner() {
+            return this.currentReport?.user_id === currentUser.id;
+        },
+        
+        canReview() {
+            return currentUser.role === 'pm';
+        },
+        
+        canApprove() {
+            return currentUser.role === 'admin';
+        },
+        
+        canApproveProposal() {
+            return ['pm', 'admin'].includes(currentUser.role);
+        },
+        
+        showDeadlineWarning() {
+            return this.currentReport?.status === 'draft' && 
+                   new Date() < new Date(this.currentReport.submit_deadline);
+        },
+        
+        async exportReport() {
+            try {
+                const data = this.reportItems.map(item => ({
+                    'Công việc': item.task?.title || item.propose_task_title || '',
+                    'Hợp đồng': item.task?.project?.name || item.propose_project?.name || '',
+                    'Giờ làm': item.hours_spent,
+                    'Mô tả': item.work_description || '',
+                    'Vướng mắc': item.blockers || '',
+                    'Loại': item.task_id ? 'Task' : 'Đề xuất'
+                }));
+                
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Report');
+                
+                XLSX.writeFile(wb, `WeeklyReport_W${this.selectedWeek}_${this.selectedYear}.xlsx`);
+                showToast('Xuất file thành công', 'success');
+                
+            } catch (error) {
+                console.error('Error exporting report:', error);
+                showToast('Lỗi xuất file', 'error');
+            }
+        }
+    };
+}
+
+// Show add item modal
+async function showAddItemModal() {
+    document.getElementById('itemModalTitle').textContent = 'Thêm công việc';
+    document.getElementById('itemSubmitText').textContent = 'Thêm';
+    document.getElementById('itemForm').reset();
+    document.getElementById('itemId').value = '';
+    
+    // Load tasks for current user
+    await loadUserTasks();
+    
+    document.getElementById('itemModal').classList.remove('hidden');
+}
+
+// Edit report item
+async function editReportItem(item) {
+    document.getElementById('itemModalTitle').textContent = 'Sửa công việc';
+    document.getElementById('itemSubmitText').textContent = 'Cập nhật';
+    
+    await loadUserTasks();
+    
+    // Fill form
+    document.getElementById('itemId').value = item.id;
+    
+    if (item.task_id) {
+        document.querySelector('input[name="taskType"][value="existing"]').checked = true;
+        toggleTaskType('existing');
+        document.getElementById('itemTaskId').value = item.task_id;
+    } else {
+        document.querySelector('input[name="taskType"][value="proposed"]').checked = true;
+        toggleTaskType('proposed');
+        document.getElementById('itemProposeProjectId').value = item.propose_project_id || '';
+        document.getElementById('itemProposeTitle').value = item.propose_task_title || '';
+        document.getElementById('itemProposeHours').value = item.propose_estimate_hours || '';
+    }
+    
+    document.getElementById('itemHoursSpent').value = item.hours_spent;
+    document.getElementById('itemWorkDescription').value = item.work_description || '';
+    document.getElementById('itemBlockers').value = item.blockers || '';
+    
+    document.getElementById('itemModal').classList.remove('hidden');
+}
+
+// Load user tasks
+async function loadUserTasks() {
+    try {
+        const { data: tasks } = await supabase
+            .from('tasks')
+            .select(`
+                id, title,
+                project:projects(id, name, code)
+            `)
+            .eq('assignee_id', currentUser.id)
+            .is('deleted_at', null)
+            .order('title');
+        
+        const taskSelect = document.getElementById('itemTaskId');
+        taskSelect.innerHTML = '<option value="">Chọn task</option>';
+        
+        tasks?.forEach(task => {
+            taskSelect.innerHTML += `
+                <option value="${task.id}">
+                    ${task.title} (${task.project?.code || 'N/A'})
+                </option>
+            `;
+        });
+        
+        // Also load projects for proposed tasks
+        const { data: projects } = await supabase
+            .from('projects')
+            .select('id, name, code')
+            .eq('status', 'active')
+            .is('deleted_at', null)
+            .order('name');
+        
+        const projectSelect = document.getElementById('itemProposeProjectId');
+        projectSelect.innerHTML = '<option value="">Chọn hợp đồng</option>';
+        
+        projects?.forEach(project => {
+            projectSelect.innerHTML += `
+                <option value="${project.id}">
+                    ${project.name} (${project.code})
+                </option>
+            `;
+        });
+        
+    } catch (error) {
+        console.error('Error loading tasks:', error);
+    }
+}
+
+// Toggle task type
+function toggleTaskType(type) {
+    if (type === 'existing') {
+        document.getElementById('existingTaskFields').classList.remove('hidden');
+        document.getElementById('proposedTaskFields').classList.add('hidden');
+        document.getElementById('itemTaskId').required = true;
+        document.getElementById('itemProposeProjectId').required = false;
+        document.getElementById('itemProposeTitle').required = false;
+    } else {
+        document.getElementById('existingTaskFields').classList.add('hidden');
+        document.getElementById('proposedTaskFields').classList.remove('hidden');
+        document.getElementById('itemTaskId').required = false;
+        document.getElementById('itemProposeProjectId').required = true;
+        document.getElementById('itemProposeTitle').required = true;
+    }
+}
+
+// Close modals
+function closeItemModal() {
+    document.getElementById('itemModal').classList.add('hidden');
+}
+
+function closeReviewModal() {
+    document.getElementById('reviewModal').classList.add('hidden');
+}
+
+function showReviewModal() {
+    document.getElementById('reviewModal').classList.remove('hidden');
+}
+
+// Handle item form submit
+document.getElementById('itemForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const itemId = document.getElementById('itemId').value;
+    const taskType = document.querySelector('input[name="taskType"]:checked').value;
+    
+    const itemData = {
+        report_id: window.Alpine.evaluate(document.querySelector('[x-data]'), 'currentReport.id'),
+        hours_spent: parseFloat(document.getElementById('itemHoursSpent').value),
+        work_description: document.getElementById('itemWorkDescription').value || null,
+        blockers: document.getElementById('itemBlockers').value || null
+    };
+    
+    if (taskType === 'existing') {
+        itemData.task_id = document.getElementById('itemTaskId').value;
+    } else {
+        itemData.propose_project_id = document.getElementById('itemProposeProjectId').value;
+        itemData.propose_task_title = document.getElementById('itemProposeTitle').value;
+        itemData.propose_estimate_hours = parseFloat(document.getElementById('itemProposeHours').value) || null;
+    }
+    
+    try {
+        if (itemId) {
+            // Update
+            const { error } = await supabase
+                .from('weekly_report_items')
+                .update(itemData)
+                .eq('id', itemId);
+            
+            if (error) throw error;
+            showToast('Cập nhật thành công', 'success');
+        } else {
+            // Insert
+            const { error } = await supabase
+                .from('weekly_report_items')
+                .insert(itemData);
+            
+            if (error) throw error;
+            showToast('Thêm công việc thành công', 'success');
+        }
+        
+        closeItemModal();
+        location.reload(); // Simple reload
+        
+    } catch (error) {
+        console.error('Error saving item:', error);
+        showToast('Lỗi: ' + error.message, 'error');
+    }
+});
+
+// Handle review form submit
+document.getElementById('reviewForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const reportId = window.Alpine.evaluate(document.querySelector('[x-data]'), 'currentReport.id');
+    const comment = document.getElementById('pmComment').value;
+    
+    try {
+        const { error } = await supabase
+            .from('weekly_reports')
+            .update({
+                status: 'pm_reviewed',
+                pm_reviewed_by: currentUser.id,
+                pm_reviewed_at: new Date().toISOString(),
+                pm_comment: comment || null
+            })
+            .eq('id', reportId);
+        
+        if (error) throw error;
+        
+        showToast('Review báo cáo thành công', 'success');
+        closeReviewModal();
+        location.reload();
+        
+    } catch (error) {
+        console.error('Error reviewing report:', error);
+        showToast('Lỗi: ' + error.message, 'error');
+    }
+});
+</script>
