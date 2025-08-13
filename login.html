@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Đăng nhập - CRM/PM System</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.png">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <link rel="stylesheet" href="https://unpkg.com/lucide-static/font/lucide.css">
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Custom Styles -->
+    <style>
+        .bg-gradient {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .loader {
+            border-top-color: #3B82F6;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .shake {
+            animation: shake 0.5s;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-10px); }
+            20%, 40%, 60%, 80% { transform: translateX(10px); }
+        }
+    </style>
+</head>
+<body class="h-full bg-gradient">
+    <div class="min-h-full flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+        <div class="max-w-md w-full space-y-8">
+            <!-- Logo & Title -->
+            <div class="text-center">
+                <div class="flex justify-center">
+                    <div class="bg-white rounded-full p-4 shadow-lg">
+                        <i class="lucide-briefcase w-12 h-12 text-purple-600"></i>
+                    </div>
+                </div>
+                <h2 class="mt-6 text-3xl font-extrabold text-white">
+                    CRM/PM System
+                </h2>
+                <p class="mt-2 text-sm text-purple-200">
+                    Quản lý Hợp đồng & Công việc
+                </p>
+            </div>
+            
+            <!-- Login Form -->
+            <div class="bg-white rounded-lg shadow-xl p-8" x-data="loginForm()">
+                <!-- Alert Messages -->
+                <div x-show="error" x-transition
+                     class="mb-4 p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg flex items-start">
+                    <i class="lucide-alert-circle w-5 h-5 mr-2 flex-shrink-0 mt-0.5"></i>
+                    <span x-text="error"></span>
+                </div>
+                
+                <div x-show="success" x-transition
+                     class="mb-4 p-4 bg-green-50 border border-green-200 text-green-700 rounded-lg flex items-start">
+                    <i class="lucide-check-circle w-5 h-5 mr-2 flex-shrink-0 mt-0.5"></i>
+                    <span x-text="success"></span>
+                </div>
+                
+                <!-- Login Tab / Reset Password Tab -->
+                <div class="flex border-b mb-6">
+                    <button @click="tab = 'login'" 
+                            :class="tab === 'login' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-500'"
+                            class="flex-1 pb-2 font-medium transition-colors">
+                        Đăng nhập
+                    </button>
+                    <button @click="tab = 'reset'" 
+                            :class="tab === 'reset' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-500'"
+                            class="flex-1 pb-2 font-medium transition-colors">
+                        Quên mật khẩu
+                    </button>
+                </div>
+                
+                <!-- Login Form -->
+                <form @submit.prevent="handleLogin" x-show="tab === 'login'" class="space-y-6">
+                    <!-- Email -->
+                    <div>
+                        <label for="email" class="block text-sm font-medium text-gray-700">
+                            Email
+                        </label>
+                        <div class="mt-1 relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="lucide-mail w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <input x-model="email" 
+                                   id="email" 
+                                   name="email" 
+                                   type="email" 
+                                   autocomplete="email" 
+                                   required 
+                                   :disabled="loading"
+                                   class="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-purple-500 focus:border-purple-500 disabled:bg-gray-100"
+                                   placeholder="user@company.vn">
+                        </div>
+                    </div>
+                    
+                    <!-- Password -->
+                    <div>
+                        <label for="password" class="block text-sm font-medium text-gray-700">
+                            Mật khẩu
+                        </label>
+                        <div class="mt-1 relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="lucide-lock w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <input x-model="password" 
+                                   id="password" 
+                                   name="password" 
+                                   type="password" 
+                                   autocomplete="current-password" 
+                                   required 
+                                   :disabled="loading"
+                                   class="appearance-none block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-purple-500 focus:border-purple-500 disabled:bg-gray-100"
+                                   placeholder="••••••••">
+                            <button type="button" 
+                                    @click="showPassword = !showPassword"
+                                    class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                <i :class="showPassword ? 'lucide-eye-off' : 'lucide-eye'" 
+                                   class="w-5 h-5 text-gray-400 hover:text-gray-600"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Remember Me -->
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center">
+                            <input x-model="rememberMe" 
+                                   id="remember-me" 
+                                   name="remember-me" 
+                                   type="checkbox" 
+                                   class="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded">
+                            <label for="remember-me" class="ml-2 block text-sm text-gray-700">
+                                Ghi nhớ đăng nhập
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <div>
+                        <button type="submit" 
+                                :disabled="loading"
+                                class="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <span x-show="!loading">Đăng nhập</span>
+                            <span x-show="loading" class="flex items-center">
+                                <div class="loader border-2 border-white rounded-full w-4 h-4 mr-2"></div>
+                                Đang xử lý...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+                
+                <!-- Reset Password Form -->
+                <form @submit.prevent="handleResetPassword" x-show="tab === 'reset'" class="space-y-6">
+                    <div class="text-sm text-gray-600 mb-4">
+                        Nhập email của bạn để nhận link khôi phục mật khẩu.
+                    </div>
+                    
+                    <!-- Email -->
+                    <div>
+                        <label for="reset-email" class="block text-sm font-medium text-gray-700">
+                            Email
+                        </label>
+                        <div class="mt-1 relative">
+                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <i class="lucide-mail w-5 h-5 text-gray-400"></i>
+                            </div>
+                            <input x-model="resetEmail" 
+                                   id="reset-email" 
+                                   name="reset-email" 
+                                   type="email" 
+                                   autocomplete="email" 
+                                   required 
+                                   :disabled="loading"
+                                   class="appearance-none block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-purple-500 focus:border-purple-500 disabled:bg-gray-100"
+                                   placeholder="user@company.vn">
+                        </div>
+                    </div>
+                    
+                    <!-- Submit Button -->
+                    <div>
+                        <button type="submit" 
+                                :disabled="loading"
+                                class="w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors">
+                            <span x-show="!loading">Gửi email khôi phục</span>
+                            <span x-show="loading" class="flex items-center">
+                                <div class="loader border-2 border-white rounded-full w-4 h-4 mr-2"></div>
+                                Đang gửi...
+                            </span>
+                        </button>
+                    </div>
+                </form>
+            </div>
+            
+            <!-- Footer -->
+            <div class="text-center text-sm text-purple-200">
+                <p>&copy; 2025 Your Company. All rights reserved.</p>
+                <p class="mt-1">Version 1.0.0</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Change Password Modal (for force change) -->
+    <div id="changePasswordModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
+            <div class="mt-3">
+                <div class="flex items-center mb-4">
+                    <i class="lucide-key w-6 h-6 text-purple-600 mr-2"></i>
+                    <h3 class="text-lg font-medium text-gray-900">Đổi mật khẩu bắt buộc</h3>
+                </div>
+                
+                <p class="text-sm text-gray-600 mb-4">
+                    Bạn cần đổi mật khẩu lần đầu đăng nhập vì lý do bảo mật.
+                </p>
+                
+                <form id="changePasswordForm" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mật khẩu hiện tại</label>
+                        <input type="password" id="currentPassword" required
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-purple-500 focus:border-purple-500">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mật khẩu mới</label>
+                        <input type="password" id="newPassword" required minlength="8"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-purple-500 focus:border-purple-500">
+                        <p class="text-xs text-gray-500 mt-1">Tối thiểu 8 ký tự</p>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Xác nhận mật khẩu mới</label>
+                        <input type="password" id="confirmPassword" required
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-purple-500 focus:border-purple-500">
+                    </div>
+                    
+                    <div class="flex justify-end space-x-3 mt-6">
+                        <button type="submit"
+                                class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500">
+                            Đổi mật khẩu
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Scripts -->
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    
+    <script>
+        // Alpine.js Login Form Component
+        function loginForm() {
+            return {
+                tab: 'login',
+                email: '',
+                password: '',
+                resetEmail: '',
+                rememberMe: false,
+                showPassword: false,
+                loading: false,
+                error: '',
+                success: '',
+                
+                async handleLogin() {
+                    this.loading = true;
+                    this.error = '';
+                    this.success = '';
+                    
+                    try {
+                        const result = await authManager.login(
+                            this.email, 
+                            this.password, 
+                            this.rememberMe
+                        );
+                        
+                        if (result.requirePasswordChange) {
+                            // Show change password modal
+                            document.getElementById('changePasswordModal').classList.remove('hidden');
+                        } else {
+                            this.success = 'Đăng nhập thành công! Đang chuyển hướng...';
+                            setTimeout(() => {
+                                window.location.href = 'index.html';
+                            }, 1000);
+                        }
+                    } catch (error) {
+                        this.error = error.message;
+                        // Add shake animation
+                        this.$el.classList.add('shake');
+                        setTimeout(() => {
+                            this.$el.classList.remove('shake');
+                        }, 500);
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                async handleResetPassword() {
+                    this.loading = true;
+                    this.error = '';
+                    this.success = '';
+                    
+                    try {
+                        await authManager.resetPassword(this.resetEmail);
+                        this.success = 'Email khôi phục đã được gửi! Vui lòng kiểm tra hộp thư.';
+                        this.resetEmail = '';
+                    } catch (error) {
+                        this.error = error.message;
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                
+                init() {
+                    // Check if already logged in
+                    authManager.getSession().then(session => {
+                        if (session) {
+                            window.location.href = 'index.html';
+                        }
+                    });
+                    
+                    // Handle password visibility toggle
+                    this.$watch('showPassword', value => {
+                        const input = document.getElementById('password');
+                        input.type = value ? 'text' : 'password';
+                    });
+                }
+            }
+        }
+        
+        // Handle force change password
+        document.getElementById('changePasswordForm')?.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (newPassword !== confirmPassword) {
+                alert('Mật khẩu xác nhận không khớp!');
+                return;
+            }
+            
+            try {
+                await authManager.changePassword(currentPassword, newPassword, confirmPassword);
+                alert('Đổi mật khẩu thành công!');
+                window.location.href = 'index.html';
+            } catch (error) {
+                alert('Lỗi: ' + error.message);
+            }
+        });
+        
+        // Auto-focus email field
+        window.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('email')?.focus();
+        });
+    </script>
+</body>
+</html>
