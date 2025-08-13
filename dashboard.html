@@ -1,0 +1,599 @@
+<!-- Dashboard Page -->
+<div class="space-y-6">
+    <!-- Page Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Dashboard</h1>
+                <p class="text-gray-600 mt-1">Tổng quan hệ thống CRM/PM</p>
+            </div>
+            <div class="flex items-center space-x-2 text-sm text-gray-600">
+                <i class="lucide-calendar w-4 h-4"></i>
+                <span id="current-date"></span>
+                <span class="mx-2">•</span>
+                <span>Tuần <span id="current-week"></span> / <span id="current-year"></span></span>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <!-- Tasks Card -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Công việc của tôi</p>
+                    <div class="mt-2">
+                        <p class="text-3xl font-bold text-gray-900" id="my-tasks-count">0</p>
+                        <div class="flex items-center mt-2 text-sm">
+                            <span class="text-green-600" id="completed-tasks">0 hoàn thành</span>
+                            <span class="mx-2 text-gray-400">|</span>
+                            <span class="text-orange-600" id="pending-tasks">0 đang chờ</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-3 bg-blue-100 rounded-lg">
+                    <i class="lucide-check-square w-6 h-6 text-blue-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Weekly Report Card -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Báo cáo tuần này</p>
+                    <div class="mt-2">
+                        <p class="text-3xl font-bold text-gray-900" id="wr-hours">0h</p>
+                        <div class="mt-2">
+                            <span id="wr-status" class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium">
+                                Chưa tạo
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-3 bg-purple-100 rounded-lg">
+                    <i class="lucide-file-text w-6 h-6 text-purple-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Projects Card (not for User role) -->
+        <div class="bg-white rounded-lg shadow p-6 hide-for-user">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Hợp đồng đang thực hiện</p>
+                    <div class="mt-2">
+                        <p class="text-3xl font-bold text-gray-900" id="active-projects">0</p>
+                        <div class="mt-2 text-sm text-gray-600">
+                            Tổng giá trị: <span id="total-value" class="font-medium">0 ₫</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-3 bg-green-100 rounded-lg">
+                    <i class="lucide-folder w-6 h-6 text-green-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Team Overview Card (for PM/Admin) -->
+        <div class="bg-white rounded-lg shadow p-6 role-pm role-admin">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Team của tôi</p>
+                    <div class="mt-2">
+                        <p class="text-3xl font-bold text-gray-900" id="team-members">0</p>
+                        <div class="mt-2 text-sm">
+                            <span class="text-yellow-600" id="pending-reviews">0 WR chờ duyệt</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-3 bg-orange-100 rounded-lg">
+                    <i class="lucide-users w-6 h-6 text-orange-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Payments Card (for ACC/Admin) -->
+        <div class="bg-white rounded-lg shadow p-6 role-acc role-admin">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm font-medium text-gray-600">Thanh toán tháng này</p>
+                    <div class="mt-2">
+                        <p class="text-3xl font-bold text-gray-900" id="monthly-payments">0 ₫</p>
+                        <div class="mt-2 text-sm text-gray-600">
+                            <span id="payment-count">0 giao dịch</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="p-3 bg-red-100 rounded-lg">
+                    <i class="lucide-credit-card w-6 h-6 text-red-600"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Charts Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Tasks by Status Chart -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Phân bố công việc theo trạng thái</h3>
+            <div class="h-64">
+                <canvas id="taskStatusChart"></canvas>
+            </div>
+        </div>
+        
+        <!-- Weekly Hours Chart -->
+        <div class="bg-white rounded-lg shadow p-6">
+            <h3 class="text-lg font-medium text-gray-900 mb-4">Giờ làm việc 4 tuần gần nhất</h3>
+            <div class="h-64">
+                <canvas id="weeklyHoursChart"></canvas>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Recent Activities & Notifications -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Recent Tasks -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b">
+                <h3 class="text-lg font-medium text-gray-900">Công việc gần đây</h3>
+            </div>
+            <div class="divide-y divide-gray-200" id="recent-tasks-list">
+                <div class="p-6 text-center text-gray-500">
+                    <i class="lucide-inbox w-12 h-12 mx-auto mb-2 text-gray-300"></i>
+                    <p>Đang tải...</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Upcoming Deadlines -->
+        <div class="bg-white rounded-lg shadow">
+            <div class="p-6 border-b">
+                <h3 class="text-lg font-medium text-gray-900">Deadline sắp tới</h3>
+            </div>
+            <div class="divide-y divide-gray-200" id="upcoming-deadlines">
+                <div class="p-6 text-center text-gray-500">
+                    <i class="lucide-calendar w-12 h-12 mx-auto mb-2 text-gray-300"></i>
+                    <p>Đang tải...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Project Progress (for PM/Admin) -->
+    <div class="bg-white rounded-lg shadow hide-for-user">
+        <div class="p-6 border-b">
+            <h3 class="text-lg font-medium text-gray-900">Tiến độ dự án</h3>
+        </div>
+        <div class="p-6">
+            <div class="space-y-4" id="project-progress-list">
+                <div class="text-center text-gray-500">
+                    <i class="lucide-folder w-12 h-12 mx-auto mb-2 text-gray-300"></i>
+                    <p>Đang tải...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize Dashboard
+async function initDashboard() {
+    console.log('Initializing dashboard...');
+    
+    // Set current date and week
+    const now = new Date();
+    document.getElementById('current-date').textContent = formatDate(now);
+    document.getElementById('current-week').textContent = getWeekNumber(now);
+    document.getElementById('current-year').textContent = now.getFullYear();
+    
+    // Load statistics
+    await loadDashboardStats();
+    
+    // Initialize charts
+    initCharts();
+    
+    // Load recent activities
+    loadRecentTasks();
+    loadUpcomingDeadlines();
+    
+    // Load project progress (for PM/Admin)
+    if (currentUser.role !== 'user') {
+        loadProjectProgress();
+    }
+}
+
+// Load dashboard statistics
+async function loadDashboardStats() {
+    try {
+        // Load my tasks count
+        const { data: myTasks, error: tasksError } = await supabase
+            .from('tasks')
+            .select('status')
+            .eq('assignee_id', currentUser.id)
+            .is('deleted_at', null);
+        
+        if (!tasksError && myTasks) {
+            document.getElementById('my-tasks-count').textContent = myTasks.length;
+            
+            const completed = myTasks.filter(t => t.status === 'completed').length;
+            const pending = myTasks.filter(t => ['pending', 'in_progress'].includes(t.status)).length;
+            
+            document.getElementById('completed-tasks').textContent = `${completed} hoàn thành`;
+            document.getElementById('pending-tasks').textContent = `${pending} đang chờ`;
+        }
+        
+        // Load current week report
+        const currentWeek = getCurrentWeekYear();
+        const { data: weeklyReport } = await supabase
+            .from('weekly_reports')
+            .select('status, total_hours')
+            .eq('user_id', currentUser.id)
+            .eq('week_number', currentWeek.week)
+            .eq('year', currentWeek.year)
+            .single();
+        
+        if (weeklyReport) {
+            document.getElementById('wr-hours').textContent = `${weeklyReport.total_hours || 0}h`;
+            
+            const statusElement = document.getElementById('wr-status');
+            statusElement.textContent = CONFIG.WR_STATUS_NAMES[weeklyReport.status];
+            statusElement.className = `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[weeklyReport.status]}`;
+        }
+        
+        // Load projects (not for User)
+        if (currentUser.role !== 'user') {
+            const { data: projects } = await supabase
+                .from('projects')
+                .select('contract_value')
+                .eq('status', 'active')
+                .is('deleted_at', null);
+            
+            if (projects) {
+                document.getElementById('active-projects').textContent = projects.length;
+                const totalValue = projects.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+                document.getElementById('total-value').textContent = formatCurrency(totalValue);
+            }
+        }
+        
+        // Load team stats (for PM)
+        if (currentUser.role === 'pm') {
+            // Get team members count
+            const { data: teamTasks } = await supabase
+                .from('tasks')
+                .select('assignee_id, project_id')
+                .in('project_id', 
+                    supabase
+                        .from('projects')
+                        .select('id')
+                        .eq('pm_id', currentUser.id)
+                );
+            
+            const uniqueMembers = new Set(teamTasks?.map(t => t.assignee_id) || []);
+            document.getElementById('team-members').textContent = uniqueMembers.size;
+            
+            // Get pending reviews
+            const { data: pendingWRs } = await supabase
+                .from('weekly_reports')
+                .select('id')
+                .eq('status', 'submitted')
+                .in('user_id', Array.from(uniqueMembers));
+            
+            document.getElementById('pending-reviews').textContent = `${pendingWRs?.length || 0} WR chờ duyệt`;
+        }
+        
+        // Load payments (for ACC/Admin)
+        if (['acc', 'admin'].includes(currentUser.role)) {
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+            
+            const { data: payments } = await supabase
+                .from('payments')
+                .select('amount')
+                .gte('paid_date', startOfMonth.toISOString())
+                .eq('status', 'completed');
+            
+            if (payments) {
+                const total = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+                document.getElementById('monthly-payments').textContent = formatCurrency(total);
+                document.getElementById('payment-count').textContent = `${payments.length} giao dịch`;
+            }
+        }
+        
+    } catch (error) {
+        console.error('Error loading dashboard stats:', error);
+    }
+}
+
+// Initialize charts
+function initCharts() {
+    // Task Status Chart
+    const taskCtx = document.getElementById('taskStatusChart').getContext('2d');
+    new Chart(taskCtx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.values(CONFIG.TASK_STATUS_NAMES),
+            datasets: [{
+                data: [0, 0, 0, 0, 0], // Will be updated with real data
+                backgroundColor: [
+                    '#9CA3AF', // Pending - Gray
+                    '#3B82F6', // In Progress - Blue
+                    '#F59E0B', // Pending Approval - Yellow
+                    '#10B981', // Completed - Green
+                    '#EF4444'  // Rejected - Red
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+    
+    // Weekly Hours Chart
+    const hoursCtx = document.getElementById('weeklyHoursChart').getContext('2d');
+    new Chart(hoursCtx, {
+        type: 'bar',
+        data: {
+            labels: [], // Will be filled with week numbers
+            datasets: [{
+                label: 'Giờ làm việc',
+                data: [], // Will be filled with hours
+                backgroundColor: '#3B82F6'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        callback: function(value) {
+                            return value + 'h';
+                        }
+                    }
+                }
+            }
+        }
+    });
+    
+    // Load real chart data
+    loadChartData();
+}
+
+// Load chart data
+async function loadChartData() {
+    try {
+        // Load task status data
+        const { data: tasks } = await supabase
+            .from('tasks')
+            .select('status')
+            .eq('assignee_id', currentUser.id)
+            .is('deleted_at', null);
+        
+        if (tasks) {
+            const statusCounts = {
+                pending: 0,
+                in_progress: 0,
+                pending_approval: 0,
+                completed: 0,
+                rejected: 0
+            };
+            
+            tasks.forEach(task => {
+                statusCounts[task.status]++;
+            });
+            
+            // Update chart
+            const chart = Chart.getChart('taskStatusChart');
+            chart.data.datasets[0].data = Object.values(statusCounts);
+            chart.update();
+        }
+        
+        // Load weekly hours data
+        const currentWeek = getWeekNumber(new Date());
+        const currentYear = new Date().getFullYear();
+        
+        const { data: weeklyReports } = await supabase
+            .from('weekly_reports')
+            .select('week_number, total_hours')
+            .eq('user_id', currentUser.id)
+            .eq('year', currentYear)
+            .gte('week_number', currentWeek - 3)
+            .lte('week_number', currentWeek)
+            .order('week_number');
+        
+        if (weeklyReports) {
+            const chart = Chart.getChart('weeklyHoursChart');
+            chart.data.labels = weeklyReports.map(wr => `Tuần ${wr.week_number}`);
+            chart.data.datasets[0].data = weeklyReports.map(wr => wr.total_hours || 0);
+            chart.update();
+        }
+        
+    } catch (error) {
+        console.error('Error loading chart data:', error);
+    }
+}
+
+// Load recent tasks
+async function loadRecentTasks() {
+    try {
+        const { data: tasks } = await supabase
+            .from('tasks')
+            .select(`
+                *,
+                project:projects(name, code)
+            `)
+            .eq('assignee_id', currentUser.id)
+            .is('deleted_at', null)
+            .order('updated_at', { ascending: false })
+            .limit(5);
+        
+        const listDiv = document.getElementById('recent-tasks-list');
+        
+        if (tasks && tasks.length > 0) {
+            listDiv.innerHTML = tasks.map(task => `
+                <div class="p-4 hover:bg-gray-50 cursor-pointer" onclick="navigate('tasks')">
+                    <div class="flex items-start justify-between">
+                        <div class="flex-1">
+                            <p class="text-sm font-medium text-gray-900">${task.title}</p>
+                            <p class="text-xs text-gray-500 mt-1">${task.project?.name || 'N/A'}</p>
+                        </div>
+                        <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[task.status]}">
+                            ${CONFIG.TASK_STATUS_NAMES[task.status]}
+                        </span>
+                    </div>
+                    <div class="mt-2 flex items-center space-x-4 text-xs text-gray-500">
+                        <span class="flex items-center">
+                            <i class="lucide-clock w-3 h-3 mr-1"></i>
+                            ${task.estimate_hours || 0}h
+                        </span>
+                        ${task.due_date ? `
+                            <span class="flex items-center">
+                                <i class="lucide-calendar w-3 h-3 mr-1"></i>
+                                ${formatDate(task.due_date)}
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('');
+        } else {
+            listDiv.innerHTML = `
+                <div class="p-6 text-center text-gray-500">
+                    <p>Không có công việc nào</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading recent tasks:', error);
+    }
+}
+
+// Load upcoming deadlines
+async function loadUpcomingDeadlines() {
+    try {
+        const today = new Date().toISOString().split('T')[0];
+        const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
+        
+        const { data: tasks } = await supabase
+            .from('tasks')
+            .select(`
+                *,
+                project:projects(name)
+            `)
+            .eq('assignee_id', currentUser.id)
+            .gte('due_date', today)
+            .lte('due_date', nextWeek)
+            .is('deleted_at', null)
+            .order('due_date')
+            .limit(5);
+        
+        const listDiv = document.getElementById('upcoming-deadlines');
+        
+        if (tasks && tasks.length > 0) {
+            listDiv.innerHTML = tasks.map(task => {
+                const dueDate = new Date(task.due_date);
+                const daysLeft = Math.ceil((dueDate - new Date()) / (1000 * 60 * 60 * 24));
+                const urgencyClass = daysLeft <= 1 ? 'text-red-600' : daysLeft <= 3 ? 'text-orange-600' : 'text-gray-600';
+                
+                return `
+                    <div class="p-4 hover:bg-gray-50 cursor-pointer" onclick="navigate('tasks')">
+                        <div class="flex items-start justify-between">
+                            <div class="flex-1">
+                                <p class="text-sm font-medium text-gray-900">${task.title}</p>
+                                <p class="text-xs text-gray-500 mt-1">${task.project?.name || 'N/A'}</p>
+                            </div>
+                            <span class="text-sm font-medium ${urgencyClass}">
+                                ${daysLeft === 0 ? 'Hôm nay' : daysLeft === 1 ? 'Ngày mai' : `${daysLeft} ngày`}
+                            </span>
+                        </div>
+                        <div class="mt-2 flex items-center space-x-2">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${PRIORITY_COLORS[task.priority]}">
+                                ${CONFIG.TASK_PRIORITY_NAMES[task.priority]}
+                            </span>
+                            <span class="text-xs text-gray-500">
+                                ${formatDate(task.due_date)}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            listDiv.innerHTML = `
+                <div class="p-6 text-center text-gray-500">
+                    <p>Không có deadline trong 7 ngày tới</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading upcoming deadlines:', error);
+    }
+}
+
+// Load project progress (for PM/Admin)
+async function loadProjectProgress() {
+    try {
+        let query = supabase
+            .from('project_financial_view')
+            .select('*')
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(5);
+        
+        // Filter by PM if not admin
+        if (currentUser.role === 'pm') {
+            query = query.eq('pm_id', currentUser.id);
+        }
+        
+        const { data: projects } = await query;
+        
+        const listDiv = document.getElementById('project-progress-list');
+        
+        if (projects && projects.length > 0) {
+            listDiv.innerHTML = projects.map(project => {
+                const progress = project.progress_percent || 0;
+                const progressColor = progress < 30 ? 'bg-red-500' : progress < 70 ? 'bg-yellow-500' : 'bg-green-500';
+                
+                return `
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="text-sm font-medium text-gray-900">${project.name}</p>
+                                <p class="text-xs text-gray-500">${project.customer_name} • ${project.code}</p>
+                            </div>
+                            <span class="text-sm font-medium">${progress.toFixed(1)}%</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="${progressColor} h-2 rounded-full transition-all duration-300" 
+                                 style="width: ${progress}%"></div>
+                        </div>
+                        <div class="flex items-center justify-between text-xs text-gray-500">
+                            <span>${project.hours_actual}h / ${project.hours_estimated}h</span>
+                            <span>Deadline: ${formatDate(project.end_date)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        } else {
+            listDiv.innerHTML = `
+                <div class="text-center text-gray-500">
+                    <p>Không có dự án nào đang thực hiện</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading project progress:', error);
+    }
+}
+
+// Initialize when page loads
+if (typeof initDashboard === 'function') {
+    initDashboard();
+}
+</script>
