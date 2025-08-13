@@ -1,0 +1,868 @@
+<!-- Weekly Plans Page -->
+<div class="space-y-6" x-data="weeklyPlansPage()">
+    <!-- Page Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Kế hoạch tuần</h1>
+                <p class="text-gray-600 mt-1">Lập kế hoạch công việc cho tuần tới</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex items-center space-x-3">
+                <!-- Week selector -->
+                <div class="flex items-center space-x-2">
+                    <button @click="previousWeek()" class="p-2 hover:bg-gray-100 rounded">
+                        <i class="lucide-chevron-left w-5 h-5"></i>
+                    </button>
+                    <div class="text-center">
+                        <p class="font-medium">Tuần <span x-text="selectedWeek"></span></p>
+                        <p class="text-sm text-gray-500" x-text="getWeekDateRange()"></p>
+                    </div>
+                    <button @click="nextWeek()" class="p-2 hover:bg-gray-100 rounded">
+                        <i class="lucide-chevron-right w-5 h-5"></i>
+                    </button>
+                </div>
+                
+                <!-- Actions -->
+                <button @click="createOrEditPlan()" 
+                        class="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="lucide-file-plus w-4 h-4 mr-2"></i>
+                    <span x-text="currentPlan ? 'Chỉnh sửa' : 'Tạo kế hoạch'"></span>
+                </button>
+                
+                <button @click="exportPlan()" x-show="currentPlan"
+                        class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    <i class="lucide-download w-4 h-4 mr-2"></i>
+                    Xuất Excel
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Plan Status Card -->
+    <div x-show="currentPlan" class="bg-white shadow rounded-lg p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <p class="text-sm text-gray-600">Trạng thái kế hoạch</p>
+                <div class="mt-2 flex items-center space-x-4">
+                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
+                          :class="getStatusColor(currentPlan?.status)">
+                        <span x-text="planStatusNames[currentPlan?.status]"></span>
+                    </span>
+                    <span class="text-sm text-gray-600">
+                        Tổng giờ dự kiến: <span class="font-medium" x-text="getTotalPlannedHours()"></span>h
+                    </span>
+                </div>
+            </div>
+            <div class="flex items-center space-x-2">
+                <!-- Submit button (for draft) -->
+                <template x-if="currentPlan?.status === 'draft' && isOwner()">
+                    <button @click="submitPlan()" 
+                            class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                        <i class="lucide-send w-4 h-4 inline mr-2"></i>
+                        Nộp kế hoạch
+                    </button>
+                </template>
+                
+                <!-- Mark as seen (for PM) -->
+                <template x-if="currentPlan?.status === 'submitted' && isPM()">
+                    <button @click="markAsSeen()" 
+                            class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                        <i class="lucide-eye w-4 h-4 inline mr-2"></i>
+                        Đánh dấu đã xem
+                    </button>
+                </template>
+                
+                <!-- Copy to next week -->
+                <template x-if="currentPlan && isOwner()">
+                    <button @click="copyToNextWeek()" 
+                            class="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700">
+                        <i class="lucide-copy w-4 h-4 inline mr-2"></i>
+                        Copy sang tuần sau
+                    </button>
+                </template>
+            </div>
+        </div>
+        
+        <!-- PM seen info -->
+        <div x-show="currentPlan?.pm_seen_at" class="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+            <p class="text-sm text-purple-800">
+                PM đã xem: <span x-text="currentPlan?.pm_seen_by?.full_name"></span> - 
+                <span x-text="formatDateTime(currentPlan?.pm_seen_at)"></span>
+            </p>
+        </div>
+    </div>
+    
+    <!-- Plan Items -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="p-6 border-b flex items-center justify-between">
+            <h3 class="text-lg font-medium text-gray-900">Chi tiết kế hoạch</h3>
+            
+            <!-- Add Item button (for draft status) -->
+            <div x-show="currentPlan?.status === 'draft' && isOwner()">
+                <button @click="showAddItemModal()" 
+                        class="px-3 py-1.5 bg-blue-600 text-white text-sm rounded hover:bg-blue-700">
+                    <i class="lucide-plus w-4 h-4 inline mr-1"></i>
+                    Thêm công việc
+                </button>
+            </div>
+        </div>
+        
+        <!-- Items Table -->
+        <div x-show="planItems.length > 0" class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Công việc
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Hợp đồng
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Giờ dự kiến
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ghi chú
+                        </th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Thao tác
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="item in planItems" :key="item.id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                                <div>
+                                    <!-- Existing task -->
+                                    <template x-if="item.task_id">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-900" x-text="item.task?.title"></p>
+                                            <p class="text-xs text-gray-500">Task có sẵn</p>
+                                        </div>
+                                    </template>
+                                    
+                                    <!-- Proposed task -->
+                                    <template x-if="!item.task_id && item.proposed_title">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-900">
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-800 mr-2">
+                                                    Đề xuất
+                                                </span>
+                                                <span x-text="item.proposed_title"></span>
+                                            </p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-900" x-text="item.project?.name || 'N/A'"></p>
+                                <p class="text-xs text-gray-500" x-text="item.project?.code"></p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm font-medium text-gray-900"><span x-text="item.planned_hours || 0"></span>h</p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-600 line-clamp-2" x-text="item.note || '-'"></p>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <template x-if="currentPlan?.status === 'draft' && isOwner()">
+                                    <div class="flex items-center justify-center space-x-2">
+                                        <button @click="editItem(item)" class="text-blue-600 hover:text-blue-900">
+                                            <i class="lucide-edit w-4 h-4"></i>
+                                        </button>
+                                        <button @click="deleteItem(item.id)" class="text-red-600 hover:text-red-900">
+                                            <i class="lucide-trash-2 w-4 h-4"></i>
+                                        </button>
+                                    </div>
+                                </template>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Empty state -->
+        <div x-show="planItems.length === 0" class="p-12 text-center">
+            <i class="lucide-calendar-x w-16 h-16 text-gray-300 mx-auto mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Chưa có kế hoạch</h3>
+            <p class="text-gray-500">Thêm công việc dự kiến cho tuần này</p>
+        </div>
+    </div>
+    
+    <!-- Other Plans (for PM/Admin) -->
+    <div x-show="otherPlans.length > 0" class="bg-white shadow rounded-lg">
+        <div class="p-6 border-b">
+            <h3 class="text-lg font-medium text-gray-900">Kế hoạch của team</h3>
+        </div>
+        <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nhân viên</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tổng giờ</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ngày nộp</th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Thao tác</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="plan in otherPlans" :key="plan.id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4">
+                                <p class="text-sm font-medium text-gray-900" x-text="plan.user?.full_name"></p>
+                                <p class="text-xs text-gray-500" x-text="plan.user?.employee_code"></p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                      :class="getStatusColor(plan.status)">
+                                    <span x-text="planStatusNames[plan.status]"></span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-900"><span x-text="plan.total_hours || 0"></span>h</p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-900" x-text="plan.submitted_at ? formatDateTime(plan.submitted_at) : '-'"></p>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <button @click="viewPlan(plan.id)" class="text-blue-600 hover:text-blue-900">
+                                    <i class="lucide-eye w-4 h-4"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- Add/Edit Item Modal -->
+<div id="planItemModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 id="planItemModalTitle" class="text-lg font-medium text-gray-900">Thêm công việc vào kế hoạch</h3>
+            <button onclick="closePlanItemModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        
+        <form id="planItemForm" class="space-y-4">
+            <input type="hidden" id="planItemId">
+            
+            <!-- Task Type -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Loại công việc</label>
+                <div class="flex space-x-4">
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="planTaskType" value="existing" checked
+                               onchange="togglePlanTaskType(this.value)"
+                               class="form-radio text-blue-600">
+                        <span class="ml-2">Task có sẵn</span>
+                    </label>
+                    <label class="inline-flex items-center">
+                        <input type="radio" name="planTaskType" value="proposed"
+                               onchange="togglePlanTaskType(this.value)"
+                               class="form-radio text-blue-600">
+                        <span class="ml-2">Đề xuất task mới</span>
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Project -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Hợp đồng *</label>
+                <select id="planItemProjectId" required onchange="loadProjectTasks(this.value)"
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    <option value="">Chọn hợp đồng</option>
+                </select>
+            </div>
+            
+            <!-- Existing Task Fields -->
+            <div id="existingPlanTaskFields">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Chọn task</label>
+                    <select id="planItemTaskId" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="">Chọn task</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Proposed Task Fields -->
+            <div id="proposedPlanTaskFields" class="hidden">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Tiêu đề công việc đề xuất *</label>
+                    <input type="text" id="planItemProposedTitle" maxlength="500"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+            </div>
+            
+            <!-- Common Fields -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Số giờ dự kiến *</label>
+                <input type="number" id="planItemPlannedHours" required min="0" step="0.5"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Ghi chú</label>
+                <textarea id="planItemNote" rows="3"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4">
+                <button type="button" onclick="closePlanItemModal()"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+                    Hủy
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <span id="planItemSubmitText">Thêm</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Alpine.js Weekly Plans Component
+function weeklyPlansPage() {
+    return {
+        selectedWeek: getWeekNumber(new Date()) + 1, // Next week by default
+        selectedYear: new Date().getFullYear(),
+        currentPlan: null,
+        planItems: [],
+        otherPlans: [],
+        projects: [],
+        planStatusNames: CONFIG.PLAN_STATUS_NAMES,
+        
+        async init() {
+            await this.loadProjects();
+            await this.loadPlan();
+            await this.loadOtherPlans();
+        },
+        
+        async loadProjects() {
+            try {
+                const { data: projects } = await supabase
+                    .from('projects')
+                    .select('id, name, code')
+                    .eq('status', 'active')
+                    .is('deleted_at', null)
+                    .order('name');
+                
+                this.projects = projects || [];
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        },
+        
+        async loadPlan() {
+            try {
+                const { data: plan } = await supabase
+                    .from('weekly_plans')
+                    .select(`
+                        *,
+                        user:user_profiles!user_id(full_name, employee_code),
+                        pm_seen_by:user_profiles!pm_seen_by(full_name)
+                    `)
+                    .eq('user_id', currentUser.id)
+                    .eq('week_number', this.selectedWeek)
+                    .eq('year', this.selectedYear)
+                    .single();
+                
+                this.currentPlan = plan;
+                
+                if (plan) {
+                    await this.loadPlanItems(plan.id);
+                } else {
+                    this.planItems = [];
+                }
+                
+            } catch (error) {
+                console.error('Error loading plan:', error);
+            }
+        },
+        
+        async loadPlanItems(planId) {
+            try {
+                const { data: items } = await supabase
+                    .from('weekly_plan_items')
+                    .select(`
+                        *,
+                        project:projects(id, name, code),
+                        task:tasks(id, title)
+                    `)
+                    .eq('plan_id', planId)
+                    .order('display_order');
+                
+                this.planItems = items || [];
+            } catch (error) {
+                console.error('Error loading plan items:', error);
+            }
+        },
+        
+        async loadOtherPlans() {
+            if (!['pm', 'admin'].includes(currentUser.role)) return;
+            
+            try {
+                let query = supabase
+                    .from('weekly_plans')
+                    .select(`
+                        *,
+                        user:user_profiles!user_id(full_name, employee_code)
+                    `)
+                    .neq('user_id', currentUser.id)
+                    .eq('week_number', this.selectedWeek)
+                    .eq('year', this.selectedYear);
+                
+                // PM only sees their team's plans
+                if (currentUser.role === 'pm') {
+                    const { data: teamMembers } = await supabase
+                        .from('user_profiles')
+                        .select('id')
+                        .eq('manager_id', currentUser.id);
+                    
+                    const teamIds = teamMembers?.map(m => m.id) || [];
+                    if (teamIds.length > 0) {
+                        query = query.in('user_id', teamIds);
+                    }
+                }
+                
+                const { data: plans } = await query.order('created_at');
+                
+                // Calculate total hours for each plan
+                for (const plan of plans || []) {
+                    const { data: items } = await supabase
+                        .from('weekly_plan_items')
+                        .select('planned_hours')
+                        .eq('plan_id', plan.id);
+                    
+                    plan.total_hours = items?.reduce((sum, item) => sum + (item.planned_hours || 0), 0) || 0;
+                }
+                
+                this.otherPlans = plans || [];
+                
+            } catch (error) {
+                console.error('Error loading other plans:', error);
+            }
+        },
+        
+        async createOrEditPlan() {
+            if (this.currentPlan) {
+                showAddItemModal();
+            } else {
+                // Create new plan
+                try {
+                    const { data: plan, error } = await supabase
+                        .from('weekly_plans')
+                        .insert({
+                            user_id: currentUser.id,
+                            week_number: this.selectedWeek,
+                            year: this.selectedYear,
+                            status: 'draft'
+                        })
+                        .select()
+                        .single();
+                    
+                    if (error) throw error;
+                    
+                    this.currentPlan = plan;
+                    showToast('Tạo kế hoạch thành công', 'success');
+                    showAddItemModal();
+                    
+                } catch (error) {
+                    console.error('Error creating plan:', error);
+                    showToast('Lỗi: ' + error.message, 'error');
+                }
+            }
+        },
+        
+        async submitPlan() {
+            if (!confirm('Bạn có chắc chắn muốn nộp kế hoạch?')) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('weekly_plans')
+                    .update({
+                        status: 'submitted',
+                        submitted_at: new Date().toISOString()
+                    })
+                    .eq('id', this.currentPlan.id);
+                
+                if (error) throw error;
+                
+                showToast('Nộp kế hoạch thành công', 'success');
+                await this.loadPlan();
+                
+            } catch (error) {
+                console.error('Error submitting plan:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        async markAsSeen() {
+            try {
+                const { error } = await supabase
+                    .from('weekly_plans')
+                    .update({
+                        status: 'pm_seen',
+                        pm_seen_by: currentUser.id,
+                        pm_seen_at: new Date().toISOString()
+                    })
+                    .eq('id', this.currentPlan.id);
+                
+                if (error) throw error;
+                
+                showToast('Đã đánh dấu đã xem', 'success');
+                await this.loadPlan();
+                
+            } catch (error) {
+                console.error('Error marking as seen:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        async copyToNextWeek() {
+            const nextWeek = this.selectedWeek + 1 > 52 ? 1 : this.selectedWeek + 1;
+            const nextYear = this.selectedWeek + 1 > 52 ? this.selectedYear + 1 : this.selectedYear;
+            
+            if (!confirm(`Copy kế hoạch sang tuần ${nextWeek}/${nextYear}?`)) return;
+            
+            try {
+                // Check if plan exists for next week
+                const { data: existingPlan } = await supabase
+                    .from('weekly_plans')
+                    .select('id')
+                    .eq('user_id', currentUser.id)
+                    .eq('week_number', nextWeek)
+                    .eq('year', nextYear)
+                    .single();
+                
+                if (existingPlan) {
+                    showToast('Đã có kế hoạch cho tuần này', 'error');
+                    return;
+                }
+                
+                // Create new plan
+                const { data: newPlan, error: planError } = await supabase
+                    .from('weekly_plans')
+                    .insert({
+                        user_id: currentUser.id,
+                        week_number: nextWeek,
+                        year: nextYear,
+                        status: 'draft',
+                        note: `Copy từ tuần ${this.selectedWeek}`
+                    })
+                    .select()
+                    .single();
+                
+                if (planError) throw planError;
+                
+                // Copy items
+                for (const item of this.planItems) {
+                    const newItem = {
+                        plan_id: newPlan.id,
+                        project_id: item.project_id,
+                        task_id: item.task_id || null,
+                        proposed_title: item.proposed_title || null,
+                        planned_hours: item.planned_hours,
+                        note: item.note || null,
+                        display_order: item.display_order
+                    };
+                    
+                    await supabase
+                        .from('weekly_plan_items')
+                        .insert(newItem);
+                }
+                
+                showToast('Copy kế hoạch thành công', 'success');
+                this.selectedWeek = nextWeek;
+                this.selectedYear = nextYear;
+                await this.loadPlan();
+                
+            } catch (error) {
+                console.error('Error copying plan:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        async deleteItem(itemId) {
+            if (!confirm('Xóa công việc này khỏi kế hoạch?')) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('weekly_plan_items')
+                    .delete()
+                    .eq('id', itemId);
+                
+                if (error) throw error;
+                
+                showToast('Đã xóa công việc', 'success');
+                await this.loadPlanItems(this.currentPlan.id);
+                
+            } catch (error) {
+                console.error('Error deleting item:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        editItem(item) {
+            window.editPlanItem(item);
+        },
+        
+        viewPlan(planId) {
+            showToast('Tính năng đang phát triển', 'info');
+        },
+        
+        getTotalPlannedHours() {
+            return this.planItems.reduce((sum, item) => sum + (item.planned_hours || 0), 0);
+        },
+        
+        previousWeek() {
+            if (this.selectedWeek > 1) {
+                this.selectedWeek--;
+            } else {
+                this.selectedWeek = 52;
+                this.selectedYear--;
+            }
+            this.loadPlan();
+            this.loadOtherPlans();
+        },
+        
+        nextWeek() {
+            if (this.selectedWeek < 52) {
+                this.selectedWeek++;
+            } else {
+                this.selectedWeek = 1;
+                this.selectedYear++;
+            }
+            this.loadPlan();
+            this.loadOtherPlans();
+        },
+        
+        getWeekDateRange() {
+            const jan1 = new Date(this.selectedYear, 0, 1);
+            const daysToAdd = (this.selectedWeek - 1) * 7;
+            const weekStart = new Date(jan1.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+            
+            // Adjust to Monday
+            const day = weekStart.getDay();
+            const diff = weekStart.getDate() - day + (day === 0 ? -6 : 1);
+            weekStart.setDate(diff);
+            
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            
+            return `${formatDate(weekStart)} - ${formatDate(weekEnd)}`;
+        },
+        
+        getStatusColor(status) {
+            const colors = {
+                draft: 'bg-gray-100 text-gray-800',
+                submitted: 'bg-blue-100 text-blue-800',
+                pm_seen: 'bg-purple-100 text-purple-800'
+            };
+            return colors[status] || 'bg-gray-100 text-gray-800';
+        },
+        
+        isOwner() {
+            return this.currentPlan?.user_id === currentUser.id;
+        },
+        
+        isPM() {
+            return currentUser.role === 'pm';
+        },
+        
+        async exportPlan() {
+            try {
+                const data = this.planItems.map(item => ({
+                    'Công việc': item.task?.title || item.proposed_title || '',
+                    'Hợp đồng': item.project?.name || '',
+                    'Mã HĐ': item.project?.code || '',
+                    'Giờ dự kiến': item.planned_hours || 0,
+                    'Ghi chú': item.note || '',
+                    'Loại': item.task_id ? 'Task có sẵn' : 'Đề xuất'
+                }));
+                
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'WeeklyPlan');
+                
+                XLSX.writeFile(wb, `WeeklyPlan_W${this.selectedWeek}_${this.selectedYear}.xlsx`);
+                showToast('Xuất file thành công', 'success');
+                
+            } catch (error) {
+                console.error('Error exporting plan:', error);
+                showToast('Lỗi xuất file', 'error');
+            }
+        }
+    };
+}
+
+// Show add item modal
+async function showAddItemModal() {
+    document.getElementById('planItemModalTitle').textContent = 'Thêm công việc vào kế hoạch';
+    document.getElementById('planItemSubmitText').textContent = 'Thêm';
+    document.getElementById('planItemForm').reset();
+    document.getElementById('planItemId').value = '';
+    
+    await loadPlanFormSelects();
+    
+    document.getElementById('planItemModal').classList.remove('hidden');
+}
+
+// Edit plan item
+async function editPlanItem(item) {
+    document.getElementById('planItemModalTitle').textContent = 'Sửa công việc';
+    document.getElementById('planItemSubmitText').textContent = 'Cập nhật';
+    
+    await loadPlanFormSelects();
+    
+    // Fill form
+    document.getElementById('planItemId').value = item.id;
+    document.getElementById('planItemProjectId').value = item.project_id;
+    
+    // Load tasks for project
+    await loadProjectTasks(item.project_id);
+    
+    if (item.task_id) {
+        document.querySelector('input[name="planTaskType"][value="existing"]').checked = true;
+        togglePlanTaskType('existing');
+        document.getElementById('planItemTaskId').value = item.task_id;
+    } else {
+        document.querySelector('input[name="planTaskType"][value="proposed"]').checked = true;
+        togglePlanTaskType('proposed');
+        document.getElementById('planItemProposedTitle').value = item.proposed_title || '';
+    }
+    
+    document.getElementById('planItemPlannedHours').value = item.planned_hours || '';
+    document.getElementById('planItemNote').value = item.note || '';
+    
+    document.getElementById('planItemModal').classList.remove('hidden');
+}
+
+// Load form selects
+async function loadPlanFormSelects() {
+    try {
+        const { data: projects } = await supabase
+            .from('projects')
+            .select('id, name, code')
+            .eq('status', 'active')
+            .is('deleted_at', null)
+            .order('name');
+        
+        const projectSelect = document.getElementById('planItemProjectId');
+        projectSelect.innerHTML = '<option value="">Chọn hợp đồng</option>';
+        
+        projects?.forEach(p => {
+            projectSelect.innerHTML += `<option value="${p.id}">${p.name} (${p.code})</option>`;
+        });
+        
+    } catch (error) {
+        console.error('Error loading form selects:', error);
+    }
+}
+
+// Load tasks for selected project
+async function loadProjectTasks(projectId) {
+    if (!projectId) {
+        document.getElementById('planItemTaskId').innerHTML = '<option value="">Chọn task</option>';
+        return;
+    }
+    
+    try {
+        const { data: tasks } = await supabase
+            .from('tasks')
+            .select('id, title')
+            .eq('project_id', projectId)
+            .eq('assignee_id', currentUser.id)
+            .is('deleted_at', null)
+            .order('title');
+        
+        const taskSelect = document.getElementById('planItemTaskId');
+        taskSelect.innerHTML = '<option value="">Chọn task</option>';
+        
+        tasks?.forEach(t => {
+            taskSelect.innerHTML += `<option value="${t.id}">${t.title}</option>`;
+        });
+        
+    } catch (error) {
+        console.error('Error loading tasks:', error);
+    }
+}
+
+// Toggle task type
+function togglePlanTaskType(type) {
+    if (type === 'existing') {
+        document.getElementById('existingPlanTaskFields').classList.remove('hidden');
+        document.getElementById('proposedPlanTaskFields').classList.add('hidden');
+        document.getElementById('planItemTaskId').required = false; // Optional
+        document.getElementById('planItemProposedTitle').required = false;
+    } else {
+        document.getElementById('existingPlanTaskFields').classList.add('hidden');
+        document.getElementById('proposedPlanTaskFields').classList.remove('hidden');
+        document.getElementById('planItemTaskId').required = false;
+        document.getElementById('planItemProposedTitle').required = true;
+    }
+}
+
+// Close modal
+function closePlanItemModal() {
+    document.getElementById('planItemModal').classList.add('hidden');
+}
+
+// Handle form submit
+document.getElementById('planItemForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const itemId = document.getElementById('planItemId').value;
+    const taskType = document.querySelector('input[name="planTaskType"]:checked').value;
+    const planId = window.Alpine.evaluate(document.querySelector('[x-data]'), 'currentPlan.id');
+    
+    const itemData = {
+        plan_id: planId,
+        project_id: document.getElementById('planItemProjectId').value,
+        planned_hours: parseFloat(document.getElementById('planItemPlannedHours').value),
+        note: document.getElementById('planItemNote').value || null
+    };
+    
+    if (taskType === 'existing') {
+        itemData.task_id = document.getElementById('planItemTaskId').value || null;
+        itemData.proposed_title = null;
+    } else {
+        itemData.task_id = null;
+        itemData.proposed_title = document.getElementById('planItemProposedTitle').value;
+    }
+    
+    try {
+        if (itemId) {
+            // Update
+            const { error } = await supabase
+                .from('weekly_plan_items')
+                .update(itemData)
+                .eq('id', itemId);
+            
+            if (error) throw error;
+            showToast('Cập nhật thành công', 'success');
+        } else {
+            // Insert
+            const { error } = await supabase
+                .from('weekly_plan_items')
+                .insert(itemData);
+            
+            if (error) throw error;
+            showToast('Thêm công việc thành công', 'success');
+        }
+        
+        closePlanItemModal();
+        location.reload();
+        
+    } catch (error) {
+        console.error('Error saving item:', error);
+        showToast('Lỗi: ' + error.message, 'error');
+    }
+});
+</script>

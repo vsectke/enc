@@ -1,0 +1,847 @@
+<!-- Payments Management Page -->
+<div class="space-y-6" x-data="paymentsPage()">
+    <!-- Page Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Quản lý Thanh toán</h1>
+                <p class="text-gray-600 mt-1">Theo dõi các khoản thanh toán và hóa đơn</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex space-x-3">
+                <!-- Create Payment Button (ACC/Admin) -->
+                <button @click="showCreatePaymentModal()" 
+                        class="role-admin role-acc inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="lucide-plus w-4 h-4 mr-2"></i>
+                    Thêm thanh toán
+                </button>
+                
+                <!-- Export Button -->
+                <button @click="exportPayments()" 
+                        class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    <i class="lucide-download w-4 h-4 mr-2"></i>
+                    Xuất Excel
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Tổng thanh toán</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="stats.total"></p>
+                </div>
+                <div class="p-3 bg-blue-100 rounded-lg">
+                    <i class="lucide-credit-card w-6 h-6 text-blue-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Đã thanh toán</p>
+                    <p class="text-xl font-bold text-green-600" x-text="formatCurrency(stats.completed)"></p>
+                </div>
+                <div class="p-3 bg-green-100 rounded-lg">
+                    <i class="lucide-check-circle w-6 h-6 text-green-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Chờ thanh toán</p>
+                    <p class="text-xl font-bold text-orange-600" x-text="formatCurrency(stats.pending)"></p>
+                </div>
+                <div class="p-3 bg-orange-100 rounded-lg">
+                    <i class="lucide-clock w-6 h-6 text-orange-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Tháng này</p>
+                    <p class="text-xl font-bold text-purple-600" x-text="formatCurrency(stats.thisMonth)"></p>
+                </div>
+                <div class="p-3 bg-purple-100 rounded-lg">
+                    <i class="lucide-calendar w-6 h-6 text-purple-600"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Hợp đồng</label>
+                <select x-model="filters.project" @change="loadPayments()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Tất cả hợp đồng</option>
+                    <template x-for="project in projects" :key="project.id">
+                        <option :value="project.id" x-text="`${project.name} (${project.code})`"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
+                <select x-model="filters.status" @change="loadPayments()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Tất cả trạng thái</option>
+                    <option value="pending">Chờ thanh toán</option>
+                    <option value="completed">Đã thanh toán</option>
+                    <option value="cancelled">Đã hủy</option>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Từ ngày</label>
+                <input type="date" x-model="filters.fromDate" @change="loadPayments()"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Đến ngày</label>
+                <input type="date" x-model="filters.toDate" @change="loadPayments()"
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Payments Table -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div x-show="loading" class="p-12 text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            <p class="mt-4 text-gray-600">Đang tải danh sách thanh toán...</p>
+        </div>
+        
+        <div x-show="!loading && payments.length > 0" class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Số HĐ
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Hợp đồng
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Khách hàng
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Milestone
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Số tiền
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            VAT
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Tổng cộng
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ngày TT
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Trạng thái
+                        </th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Thao tác
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="payment in payments" :key="payment.id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm font-mono" x-text="payment.invoice_no || '-'"></span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm font-medium text-gray-900" x-text="payment.project?.name"></div>
+                                <div class="text-xs text-gray-500" x-text="payment.project?.code"></div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900" x-text="payment.project?.customer?.name"></div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900" x-text="payment.milestone_label || '-'"></div>
+                                <div class="text-xs text-gray-500">Lần <span x-text="payment.payment_no || 1"></span></div>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm font-medium text-gray-900" x-text="formatCurrency(payment.amount)"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm text-gray-600" x-text="formatCurrency(payment.vat_amount || 0)"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm font-bold text-blue-600" x-text="formatCurrency((payment.amount || 0) + (payment.vat_amount || 0))"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm text-gray-900" x-text="payment.paid_date ? formatDate(payment.paid_date) : '-'"></span>
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                      :class="getStatusColor(payment.status)">
+                                    <span x-text="getStatusName(payment.status)"></span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <button @click="viewPayment(payment)" 
+                                            class="text-blue-600 hover:text-blue-900" title="Xem chi tiết">
+                                        <i class="lucide-eye w-4 h-4"></i>
+                                    </button>
+                                    <template x-if="canEdit(payment)">
+                                        <button @click="editPayment(payment)" 
+                                                class="text-green-600 hover:text-green-900" title="Sửa">
+                                            <i class="lucide-edit w-4 h-4"></i>
+                                        </button>
+                                    </template>
+                                    <template x-if="canDelete(payment)">
+                                        <button @click="deletePayment(payment)" 
+                                                class="text-red-600 hover:text-red-900" title="Xóa">
+                                            <i class="lucide-trash-2 w-4 h-4"></i>
+                                        </button>
+                                    </template>
+                                    <button @click="printInvoice(payment)" 
+                                            class="text-purple-600 hover:text-purple-900" title="In hóa đơn">
+                                        <i class="lucide-printer w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Empty State -->
+        <div x-show="!loading && payments.length === 0" class="p-12 text-center">
+            <i class="lucide-credit-card w-16 h-16 text-gray-300 mx-auto mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Không tìm thấy thanh toán nào</h3>
+            <p class="text-gray-500">Thử thay đổi bộ lọc hoặc thêm thanh toán mới</p>
+        </div>
+        
+        <!-- Summary Footer -->
+        <div x-show="payments.length > 0" class="bg-gray-50 px-6 py-3 border-t">
+            <div class="flex items-center justify-between">
+                <div class="text-sm text-gray-600">
+                    Tổng cộng: <span class="font-medium" x-text="payments.length"></span> thanh toán
+                </div>
+                <div class="text-sm">
+                    <span class="text-gray-600">Tổng tiền:</span>
+                    <span class="font-bold text-lg text-blue-600 ml-2" x-text="formatCurrency(getTotalAmount())"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Detail Modal -->
+<div id="paymentDetailModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Chi tiết thanh toán</h3>
+            <button onclick="closePaymentDetailModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        <div id="paymentDetailContent">
+            <!-- Content will be loaded dynamically -->
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Payment Modal -->
+<div id="paymentFormModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 id="paymentFormTitle" class="text-lg font-medium text-gray-900">Thêm thanh toán</h3>
+            <button onclick="closePaymentFormModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        
+        <form id="paymentForm" class="space-y-4">
+            <input type="hidden" id="paymentId">
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Hợp đồng *</label>
+                <select id="paymentProjectId" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    <option value="">Chọn hợp đồng</option>
+                </select>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Milestone/Đợt thanh toán</label>
+                    <input type="text" id="paymentMilestoneLabel" maxlength="200"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Lần thanh toán thứ</label>
+                    <input type="number" id="paymentNo" min="1" value="1"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Số hóa đơn</label>
+                    <input type="text" id="paymentInvoiceNo" maxlength="50"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Trạng thái</label>
+                    <select id="paymentStatus" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                        <option value="pending">Chờ thanh toán</option>
+                        <option value="completed">Đã thanh toán</option>
+                        <option value="cancelled">Đã hủy</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Số tiền (VND) *</label>
+                    <input type="number" id="paymentAmount" required min="0"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">VAT (VND)</label>
+                    <input type="number" id="paymentVatAmount" min="0" value="0"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Tổng cộng</label>
+                    <input type="text" id="paymentTotal" readonly
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 font-medium">
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Ngày thanh toán</label>
+                <input type="date" id="paymentPaidDate"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Ghi chú</label>
+                <textarea id="paymentNote" rows="3"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4 border-t">
+                <button type="button" onclick="closePaymentFormModal()"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+                    Hủy
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <span id="paymentSubmitText">Thêm thanh toán</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Alpine.js Payments Page Component
+function paymentsPage() {
+    return {
+        payments: [],
+        projects: [],
+        loading: false,
+        filters: {
+            project: '',
+            status: '',
+            fromDate: '',
+            toDate: ''
+        },
+        stats: {
+            total: 0,
+            completed: 0,
+            pending: 0,
+            thisMonth: 0
+        },
+        
+        async init() {
+            // Check if project filter in URL
+            const urlParams = new URLSearchParams(window.location.search);
+            const projectId = urlParams.get('project');
+            if (projectId) {
+                this.filters.project = projectId;
+            }
+            
+            await this.loadProjects();
+            await this.loadPayments();
+            await this.loadStats();
+        },
+        
+        async loadProjects() {
+            try {
+                const { data: projects } = await supabase
+                    .from('projects')
+                    .select(`
+                        id, name, code,
+                        customer:customers(name)
+                    `)
+                    .is('deleted_at', null)
+                    .order('created_at', { ascending: false });
+                
+                this.projects = projects || [];
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        },
+        
+        async loadPayments() {
+            this.loading = true;
+            
+            try {
+                let query = supabase
+                    .from('payments')
+                    .select(`
+                        *,
+                        project:projects(
+                            id, name, code,
+                            customer:customers(name)
+                        ),
+                        created_by:user_profiles!created_by(full_name)
+                    `)
+                    .is('deleted_at', null)
+                    .order('created_at', { ascending: false });
+                
+                // Apply filters
+                if (this.filters.project) {
+                    query = query.eq('project_id', this.filters.project);
+                }
+                
+                if (this.filters.status) {
+                    query = query.eq('status', this.filters.status);
+                }
+                
+                if (this.filters.fromDate) {
+                    query = query.gte('paid_date', this.filters.fromDate);
+                }
+                
+                if (this.filters.toDate) {
+                    query = query.lte('paid_date', this.filters.toDate);
+                }
+                
+                const { data: payments, error } = await query;
+                
+                if (error) throw error;
+                
+                this.payments = payments || [];
+                
+            } catch (error) {
+                console.error('Error loading payments:', error);
+                showToast('Lỗi tải danh sách thanh toán', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async loadStats() {
+            try {
+                const { data: payments } = await supabase
+                    .from('payments')
+                    .select('amount, vat_amount, status, paid_date')
+                    .is('deleted_at', null);
+                
+                if (payments) {
+                    this.stats.total = payments.length;
+                    
+                    const completed = payments.filter(p => p.status === 'completed');
+                    this.stats.completed = completed.reduce((sum, p) => 
+                        sum + (p.amount || 0) + (p.vat_amount || 0), 0);
+                    
+                    const pending = payments.filter(p => p.status === 'pending');
+                    this.stats.pending = pending.reduce((sum, p) => 
+                        sum + (p.amount || 0) + (p.vat_amount || 0), 0);
+                    
+                    // This month
+                    const startOfMonth = new Date();
+                    startOfMonth.setDate(1);
+                    startOfMonth.setHours(0, 0, 0, 0);
+                    
+                    const thisMonth = payments.filter(p => 
+                        p.paid_date && new Date(p.paid_date) >= startOfMonth && p.status === 'completed'
+                    );
+                    this.stats.thisMonth = thisMonth.reduce((sum, p) => 
+                        sum + (p.amount || 0) + (p.vat_amount || 0), 0);
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        },
+        
+        getTotalAmount() {
+            return this.payments.reduce((sum, p) => 
+                sum + (p.amount || 0) + (p.vat_amount || 0), 0);
+        },
+        
+        getStatusColor(status) {
+            const colors = {
+                pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+                completed: 'bg-green-100 text-green-800 border-green-300',
+                cancelled: 'bg-red-100 text-red-800 border-red-300'
+            };
+            return colors[status] || 'bg-gray-100 text-gray-800';
+        },
+        
+        getStatusName(status) {
+            const names = {
+                pending: 'Chờ thanh toán',
+                completed: 'Đã thanh toán',
+                cancelled: 'Đã hủy'
+            };
+            return names[status] || status;
+        },
+        
+        canEdit(payment) {
+            return ['admin', 'acc'].includes(currentUser.role);
+        },
+        
+        canDelete(payment) {
+            return currentUser.role === 'admin';
+        },
+        
+        viewPayment(payment) {
+            window.viewPaymentDetail(payment);
+        },
+        
+        editPayment(payment) {
+            window.editPaymentForm(payment);
+        },
+        
+        async deletePayment(payment) {
+            if (!confirm(`Bạn có chắc chắn muốn xóa thanh toán "${payment.invoice_no || payment.milestone_label}"?`)) return;
+            
+            try {
+                const { error } = await supabase
+                    .from('payments')
+                    .update({ deleted_at: new Date().toISOString() })
+                    .eq('id', payment.id);
+                
+                if (error) throw error;
+                
+                showToast('Xóa thanh toán thành công', 'success');
+                await this.loadPayments();
+                await this.loadStats();
+                
+            } catch (error) {
+                console.error('Error deleting payment:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        printInvoice(payment) {
+            // Simple print invoice
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Hóa đơn ${payment.invoice_no || ''}</title>
+                    <style>
+                        body { font-family: Arial, sans-serif; padding: 20px; }
+                        h1 { color: #333; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+                        .total { font-size: 18px; font-weight: bold; color: #2563eb; }
+                    </style>
+                </head>
+                <body>
+                    <h1>HÓA ĐƠN THANH TOÁN</h1>
+                    <p><strong>Số hóa đơn:</strong> ${payment.invoice_no || 'N/A'}</p>
+                    <p><strong>Ngày:</strong> ${formatDate(payment.paid_date || new Date())}</p>
+                    <hr>
+                    <p><strong>Khách hàng:</strong> ${payment.project?.customer?.name || ''}</p>
+                    <p><strong>Hợp đồng:</strong> ${payment.project?.name || ''} (${payment.project?.code || ''})</p>
+                    <p><strong>Milestone:</strong> ${payment.milestone_label || ''}</p>
+                    <table>
+                        <tr>
+                            <th>Nội dung</th>
+                            <th style="text-align: right">Số tiền</th>
+                        </tr>
+                        <tr>
+                            <td>Giá trị thanh toán</td>
+                            <td style="text-align: right">${formatCurrency(payment.amount)}</td>
+                        </tr>
+                        <tr>
+                            <td>VAT (10%)</td>
+                            <td style="text-align: right">${formatCurrency(payment.vat_amount || 0)}</td>
+                        </tr>
+                        <tr>
+                            <td><strong>Tổng cộng</strong></td>
+                            <td style="text-align: right" class="total">${formatCurrency((payment.amount || 0) + (payment.vat_amount || 0))}</td>
+                        </tr>
+                    </table>
+                    ${payment.note ? `<p style="margin-top: 20px;"><strong>Ghi chú:</strong> ${payment.note}</p>` : ''}
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+            printWindow.print();
+        },
+        
+        async exportPayments() {
+            try {
+                const data = this.payments.map(p => ({
+                    'Số HĐ': p.invoice_no || '',
+                    'Hợp đồng': p.project?.name || '',
+                    'Mã HĐ': p.project?.code || '',
+                    'Khách hàng': p.project?.customer?.name || '',
+                    'Milestone': p.milestone_label || '',
+                    'Lần TT': p.payment_no || 1,
+                    'Số tiền': p.amount || 0,
+                    'VAT': p.vat_amount || 0,
+                    'Tổng cộng': (p.amount || 0) + (p.vat_amount || 0),
+                    'Ngày TT': p.paid_date ? formatDate(p.paid_date) : '',
+                    'Trạng thái': this.getStatusName(p.status),
+                    'Ghi chú': p.note || '',
+                    'Người tạo': p.created_by?.full_name || '',
+                    'Ngày tạo': formatDateTime(p.created_at)
+                }));
+                
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Payments');
+                
+                XLSX.writeFile(wb, `Payments_${formatDate(new Date(), 'YYYYMMDD')}.xlsx`);
+                showToast('Xuất file thành công', 'success');
+                
+            } catch (error) {
+                console.error('Error exporting payments:', error);
+                showToast('Lỗi xuất file', 'error');
+            }
+        }
+    };
+}
+
+// View payment detail
+async function viewPaymentDetail(payment) {
+    const modal = document.getElementById('paymentDetailModal');
+    const content = document.getElementById('paymentDetailContent');
+    
+    content.innerHTML = '<p class="text-center">Đang tải...</p>';
+    modal.classList.remove('hidden');
+    
+    content.innerHTML = `
+        <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <p class="text-sm text-gray-600">Số hóa đơn:</p>
+                    <p class="font-medium">${payment.invoice_no || 'Chưa có'}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-600">Trạng thái:</p>
+                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        payment.status === 'completed' ? 'bg-green-100 text-green-800' :
+                        payment.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-red-100 text-red-800'
+                    }">
+                        ${payment.status === 'completed' ? 'Đã thanh toán' :
+                          payment.status === 'pending' ? 'Chờ thanh toán' : 'Đã hủy'}
+                    </span>
+                </div>
+            </div>
+            
+            <div>
+                <p class="text-sm text-gray-600">Hợp đồng:</p>
+                <p class="font-medium">${payment.project?.name} (${payment.project?.code})</p>
+                <p class="text-sm text-gray-500">${payment.project?.customer?.name}</p>
+            </div>
+            
+            <div>
+                <p class="text-sm text-gray-600">Milestone/Đợt thanh toán:</p>
+                <p class="font-medium">${payment.milestone_label || 'Không xác định'} - Lần ${payment.payment_no || 1}</p>
+            </div>
+            
+            <div class="bg-gray-50 p-4 rounded-lg">
+                <div class="space-y-2">
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-600">Số tiền:</span>
+                        <span class="font-medium">${formatCurrency(payment.amount)}</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-sm text-gray-600">VAT:</span>
+                        <span class="font-medium">${formatCurrency(payment.vat_amount || 0)}</span>
+                    </div>
+                    <div class="flex justify-between pt-2 border-t">
+                        <span class="font-medium">Tổng cộng:</span>
+                        <span class="font-bold text-lg text-blue-600">${formatCurrency((payment.amount || 0) + (payment.vat_amount || 0))}</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div>
+                <p class="text-sm text-gray-600">Ngày thanh toán:</p>
+                <p class="font-medium">${payment.paid_date ? formatDate(payment.paid_date) : 'Chưa thanh toán'}</p>
+            </div>
+            
+            ${payment.note ? `
+                <div>
+                    <p class="text-sm text-gray-600">Ghi chú:</p>
+                    <p class="text-sm text-gray-700 bg-gray-50 p-3 rounded">${payment.note}</p>
+                </div>
+            ` : ''}
+            
+            <div class="text-xs text-gray-500 border-t pt-4">
+                <p>Tạo bởi: ${payment.created_by?.full_name || 'N/A'} - ${formatDateTime(payment.created_at)}</p>
+                <p>Cập nhật lần cuối: ${formatDateTime(payment.updated_at)}</p>
+            </div>
+        </div>
+    `;
+}
+
+// Close payment detail modal
+function closePaymentDetailModal() {
+    document.getElementById('paymentDetailModal').classList.add('hidden');
+}
+
+// Show create payment modal
+async function showCreatePaymentModal() {
+    document.getElementById('paymentFormTitle').textContent = 'Thêm thanh toán';
+    document.getElementById('paymentSubmitText').textContent = 'Thêm thanh toán';
+    document.getElementById('paymentForm').reset();
+    document.getElementById('paymentId').value = '';
+    
+    await loadPaymentFormSelects();
+    updatePaymentTotal();
+    
+    document.getElementById('paymentFormModal').classList.remove('hidden');
+}
+
+// Edit payment form
+async function editPaymentForm(payment) {
+    document.getElementById('paymentFormTitle').textContent = 'Chỉnh sửa thanh toán';
+    document.getElementById('paymentSubmitText').textContent = 'Cập nhật';
+    
+    await loadPaymentFormSelects();
+    
+    // Fill form
+    document.getElementById('paymentId').value = payment.id;
+    document.getElementById('paymentProjectId').value = payment.project_id;
+    document.getElementById('paymentMilestoneLabel').value = payment.milestone_label || '';
+    document.getElementById('paymentNo').value = payment.payment_no || 1;
+    document.getElementById('paymentInvoiceNo').value = payment.invoice_no || '';
+    document.getElementById('paymentStatus').value = payment.status;
+    document.getElementById('paymentAmount').value = payment.amount;
+    document.getElementById('paymentVatAmount').value = payment.vat_amount || 0;
+    document.getElementById('paymentPaidDate').value = payment.paid_date || '';
+    document.getElementById('paymentNote').value = payment.note || '';
+    
+    updatePaymentTotal();
+    
+    document.getElementById('paymentFormModal').classList.remove('hidden');
+}
+
+// Load form selects
+async function loadPaymentFormSelects() {
+    try {
+        const { data: projects } = await supabase
+            .from('projects')
+            .select(`
+                id, name, code,
+                customer:customers(name)
+            `)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false });
+        
+        const projectSelect = document.getElementById('paymentProjectId');
+        projectSelect.innerHTML = '<option value="">Chọn hợp đồng</option>';
+        
+        projects?.forEach(p => {
+            projectSelect.innerHTML += `
+                <option value="${p.id}">
+                    ${p.name} (${p.code}) - ${p.customer?.name || ''}
+                </option>
+            `;
+        });
+        
+    } catch (error) {
+        console.error('Error loading form selects:', error);
+    }
+}
+
+// Update payment total
+function updatePaymentTotal() {
+    const amount = parseFloat(document.getElementById('paymentAmount').value) || 0;
+    const vat = parseFloat(document.getElementById('paymentVatAmount').value) || 0;
+    const total = amount + vat;
+    
+    document.getElementById('paymentTotal').value = formatCurrency(total);
+}
+
+// Close payment form modal
+function closePaymentFormModal() {
+    document.getElementById('paymentFormModal').classList.add('hidden');
+}
+
+// Handle payment form submit
+document.getElementById('paymentForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const paymentId = document.getElementById('paymentId').value;
+    const paymentData = {
+        project_id: document.getElementById('paymentProjectId').value,
+        milestone_label: document.getElementById('paymentMilestoneLabel').value || null,
+        payment_no: parseInt(document.getElementById('paymentNo').value) || 1,
+        invoice_no: document.getElementById('paymentInvoiceNo').value || null,
+        amount: parseInt(document.getElementById('paymentAmount').value),
+        vat_amount: parseInt(document.getElementById('paymentVatAmount').value) || 0,
+        status: document.getElementById('paymentStatus').value,
+        paid_date: document.getElementById('paymentPaidDate').value || null,
+        note: document.getElementById('paymentNote').value || null,
+        currency: 'VND'
+    };
+    
+    try {
+        if (paymentId) {
+            // Update existing payment
+            const { error } = await supabase
+                .from('payments')
+                .update(paymentData)
+                .eq('id', paymentId);
+            
+            if (error) throw error;
+            showToast('Cập nhật thanh toán thành công', 'success');
+        } else {
+            // Create new payment
+            paymentData.created_by = currentUser.id;
+            
+            const { error } = await supabase
+                .from('payments')
+                .insert(paymentData);
+            
+            if (error) throw error;
+            showToast('Thêm thanh toán thành công', 'success');
+        }
+        
+        closePaymentFormModal();
+        location.reload();
+        
+    } catch (error) {
+        console.error('Error saving payment:', error);
+        showToast('Lỗi: ' + error.message, 'error');
+    }
+});
+
+// Add event listeners for total calculation
+document.getElementById('paymentAmount')?.addEventListener('input', updatePaymentTotal);
+document.getElementById('paymentVatAmount')?.addEventListener('input', updatePaymentTotal);
+</script>

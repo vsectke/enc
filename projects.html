@@ -1,0 +1,936 @@
+<!-- Projects Management Page -->
+<div class="space-y-6" x-data="projectsPage()">
+    <!-- Page Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Quản lý Hợp đồng</h1>
+                <p class="text-gray-600 mt-1">Theo dõi các dự án và hợp đồng</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex space-x-3">
+                <!-- Create Project Button -->
+                <button @click="showCreateProjectModal()" 
+                        class="role-admin role-acc inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="lucide-plus w-4 h-4 mr-2"></i>
+                    Tạo hợp đồng mới
+                </button>
+                
+                <!-- Export Button -->
+                <button @click="exportProjects()" 
+                        class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    <i class="lucide-download w-4 h-4 mr-2"></i>
+                    Xuất Excel
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Statistics Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Tổng hợp đồng</p>
+                    <p class="text-2xl font-bold text-gray-900" x-text="stats.total"></p>
+                </div>
+                <div class="p-3 bg-blue-100 rounded-lg">
+                    <i class="lucide-folder w-6 h-6 text-blue-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Đang thực hiện</p>
+                    <p class="text-2xl font-bold text-green-600" x-text="stats.active"></p>
+                </div>
+                <div class="p-3 bg-green-100 rounded-lg">
+                    <i class="lucide-play-circle w-6 h-6 text-green-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Tổng giá trị</p>
+                    <p class="text-xl font-bold text-gray-900" x-text="formatCurrency(stats.totalValue)"></p>
+                </div>
+                <div class="p-3 bg-purple-100 rounded-lg">
+                    <i class="lucide-dollar-sign w-6 h-6 text-purple-600"></i>
+                </div>
+            </div>
+        </div>
+        
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="flex items-center justify-between">
+                <div>
+                    <p class="text-sm text-gray-600">Còn phải thu</p>
+                    <p class="text-xl font-bold text-orange-600" x-text="formatCurrency(stats.outstanding)"></p>
+                </div>
+                <div class="p-3 bg-orange-100 rounded-lg">
+                    <i class="lucide-credit-card w-6 h-6 text-orange-600"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Khách hàng</label>
+                <select x-model="filters.customer" @change="loadProjects()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Tất cả khách hàng</option>
+                    <template x-for="customer in customers" :key="customer.id">
+                        <option :value="customer.id" x-text="customer.name"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">PM phụ trách</label>
+                <select x-model="filters.pm" @change="loadProjects()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Tất cả PM</option>
+                    <template x-for="pm in pms" :key="pm.id">
+                        <option :value="pm.id" x-text="pm.full_name"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
+                <select x-model="filters.status" @change="loadProjects()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Tất cả trạng thái</option>
+                    <template x-for="(name, key) in projectStatusNames" :key="key">
+                        <option :value="key" x-text="name"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Tìm kiếm</label>
+                <input type="text" x-model="searchQuery" @input.debounce.500ms="loadProjects()"
+                       placeholder="Tên, mã hợp đồng..."
+                       class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+        </div>
+    </div>
+    
+    <!-- Projects Table -->
+    <div class="bg-white shadow rounded-lg overflow-hidden">
+        <div x-show="loading" class="p-12 text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            <p class="mt-4 text-gray-600">Đang tải danh sách hợp đồng...</p>
+        </div>
+        
+        <div x-show="!loading && projects.length > 0" class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Mã HĐ
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Tên hợp đồng
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Khách hàng
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            PM
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Giá trị HĐ
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Tiến độ
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Trạng thái
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Thời gian
+                        </th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Thao tác
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="project in projects" :key="project.id">
+                        <tr class="hover:bg-gray-50">
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="text-sm font-mono font-medium text-gray-900" x-text="project.code"></span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm font-medium text-gray-900" x-text="project.name"></div>
+                                <div class="text-xs text-gray-500 mt-1" x-text="project.notes?.substring(0, 50) + '...'"></div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900" x-text="project.customer_name"></div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900" x-text="project.pm_name || 'Chưa gán'"></div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm font-medium text-gray-900" x-text="formatCurrency(project.contract_value)"></div>
+                                <div class="text-xs text-gray-500">Budget: <span x-text="formatCurrency(project.budget)"></span></div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="flex items-center">
+                                    <div class="flex-1">
+                                        <div class="text-sm text-gray-900">
+                                            <span x-text="project.hours_actual || 0"></span>/<span x-text="project.hours_estimated || 0"></span>h
+                                        </div>
+                                        <div class="w-full bg-gray-200 rounded-full h-2 mt-1">
+                                            <div class="bg-blue-600 h-2 rounded-full" 
+                                                 :style="`width: ${Math.min(100, (project.progress_percent || 0))}%`"></div>
+                                        </div>
+                                    </div>
+                                    <span class="ml-2 text-xs text-gray-600" x-text="`${(project.progress_percent || 0).toFixed(1)}%`"></span>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                      :class="getStatusColor(project.status)">
+                                    <span x-text="projectStatusNames[project.status]"></span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900" x-text="formatDate(project.start_date)"></div>
+                                <div class="text-xs text-gray-500" x-text="project.end_date ? formatDate(project.end_date) : 'Không xác định'"></div>
+                            </td>
+                            <td class="px-6 py-4 text-center">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <button @click="viewProject(project)" 
+                                            class="text-blue-600 hover:text-blue-900" title="Xem chi tiết">
+                                        <i class="lucide-eye w-4 h-4"></i>
+                                    </button>
+                                    <template x-if="canEdit(project)">
+                                        <button @click="editProject(project)" 
+                                                class="text-green-600 hover:text-green-900" title="Sửa">
+                                            <i class="lucide-edit w-4 h-4"></i>
+                                        </button>
+                                    </template>
+                                    <button @click="viewPayments(project)" 
+                                            class="text-purple-600 hover:text-purple-900" title="Thanh toán">
+                                        <i class="lucide-credit-card w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Empty State -->
+        <div x-show="!loading && projects.length === 0" class="p-12 text-center">
+            <i class="lucide-folder-open w-16 h-16 text-gray-300 mx-auto mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Không tìm thấy hợp đồng nào</h3>
+            <p class="text-gray-500">Thử thay đổi bộ lọc hoặc tạo hợp đồng mới</p>
+        </div>
+    </div>
+</div>
+
+<!-- Project Detail Modal -->
+<div id="projectDetailModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Chi tiết hợp đồng</h3>
+            <button onclick="closeProjectDetailModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        <div id="projectDetailContent" class="space-y-6">
+            <!-- Content will be loaded dynamically -->
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Project Modal -->
+<div id="projectFormModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 id="projectFormTitle" class="text-lg font-medium text-gray-900">Tạo hợp đồng mới</h3>
+            <button onclick="closeProjectFormModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        
+        <form id="projectForm" class="space-y-6">
+            <input type="hidden" id="projectId">
+            
+            <!-- Basic Information -->
+            <div class="space-y-4">
+                <h4 class="font-medium text-gray-900">Thông tin cơ bản</h4>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mã hợp đồng</label>
+                        <input type="text" id="projectCode" readonly
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50"
+                               placeholder="Tự động tạo">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Trạng thái</label>
+                        <select id="projectStatus" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                            <option value="draft">Nháp</option>
+                            <option value="active">Đang thực hiện</option>
+                            <option value="on_hold">Tạm dừng</option>
+                            <option value="completed">Hoàn thành</option>
+                            <option value="cancelled">Đã hủy</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Tên hợp đồng *</label>
+                    <input type="text" id="projectName" required maxlength="200"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Khách hàng *</label>
+                        <select id="projectCustomerId" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                            <option value="">Chọn khách hàng</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">PM phụ trách</label>
+                        <select id="projectPmId" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                            <option value="">Chưa gán</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Financial Information -->
+            <div class="space-y-4">
+                <h4 class="font-medium text-gray-900">Thông tin tài chính</h4>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Giá trị hợp đồng (VND)</label>
+                        <input type="number" id="projectContractValue" min="0"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Ngân sách (VND)</label>
+                        <input type="number" id="projectBudget" min="0"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Điều kiện thanh toán</label>
+                    <textarea id="projectMilestoneText" rows="3"
+                              class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"
+                              placeholder="VD: Milestone 1 (30%): Ký HĐ&#10;Milestone 2 (40%): Development&#10;Milestone 3 (30%): Go-live"></textarea>
+                </div>
+                
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Thông tin xuất hóa đơn</label>
+                        <input type="text" id="projectBillingContact"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Profile hóa đơn</label>
+                        <input type="text" id="projectInvoiceProfile"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Timeline -->
+            <div class="space-y-4">
+                <h4 class="font-medium text-gray-900">Thời gian thực hiện</h4>
+                
+                <div class="grid grid-cols-3 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Ngày bắt đầu *</label>
+                        <input type="date" id="projectStartDate" required
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Ngày kết thúc</label>
+                        <input type="date" id="projectEndDate"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Giờ ước tính</label>
+                        <input type="number" id="projectHoursEstimated" min="0"
+                               class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Notes -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Ghi chú</label>
+                <textarea id="projectNotes" rows="3"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4 border-t">
+                <button type="button" onclick="closeProjectFormModal()"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+                    Hủy
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <span id="projectSubmitText">Tạo hợp đồng</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Alpine.js Projects Page Component
+function projectsPage() {
+    return {
+        projects: [],
+        customers: [],
+        pms: [],
+        loading: false,
+        searchQuery: '',
+        filters: {
+            customer: '',
+            pm: '',
+            status: ''
+        },
+        stats: {
+            total: 0,
+            active: 0,
+            totalValue: 0,
+            outstanding: 0
+        },
+        projectStatusNames: CONFIG.PROJECT_STATUS_NAMES,
+        
+        async init() {
+            await this.loadCustomers();
+            await this.loadPMs();
+            await this.loadProjects();
+            await this.loadStats();
+        },
+        
+        async loadCustomers() {
+            try {
+                const { data: customers } = await supabase
+                    .from('customers')
+                    .select('id, name')
+                    .is('deleted_at', null)
+                    .order('name');
+                
+                this.customers = customers || [];
+            } catch (error) {
+                console.error('Error loading customers:', error);
+            }
+        },
+        
+        async loadPMs() {
+            try {
+                const { data: pms } = await supabase
+                    .from('user_profiles')
+                    .select('id, full_name, employee_code')
+                    .eq('role', 'pm')
+                    .eq('is_active', true)
+                    .order('full_name');
+                
+                this.pms = pms || [];
+            } catch (error) {
+                console.error('Error loading PMs:', error);
+            }
+        },
+        
+        async loadProjects() {
+            this.loading = true;
+            
+            try {
+                let query = supabase
+                    .from('project_financial_view')
+                    .select('*')
+                    .is('deleted_at', null)
+                    .order('created_at', { ascending: false });
+                
+                // Apply filters
+                if (this.filters.customer) {
+                    query = query.eq('customer_id', this.filters.customer);
+                }
+                
+                if (this.filters.pm) {
+                    query = query.eq('pm_id', this.filters.pm);
+                }
+                
+                if (this.filters.status) {
+                    query = query.eq('status', this.filters.status);
+                }
+                
+                if (this.searchQuery) {
+                    query = query.or(`name.ilike.%${this.searchQuery}%,code.ilike.%${this.searchQuery}%`);
+                }
+                
+                // Filter by role
+                if (currentUser.role === 'pm') {
+                    query = query.eq('pm_id', currentUser.id);
+                }
+                
+                const { data: projects, error } = await query;
+                
+                if (error) throw error;
+                
+                this.projects = projects || [];
+                
+            } catch (error) {
+                console.error('Error loading projects:', error);
+                showToast('Lỗi tải danh sách hợp đồng', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async loadStats() {
+            try {
+                const { data: stats } = await supabase
+                    .from('projects')
+                    .select('status, contract_value')
+                    .is('deleted_at', null);
+                
+                if (stats) {
+                    this.stats.total = stats.length;
+                    this.stats.active = stats.filter(p => p.status === 'active').length;
+                    this.stats.totalValue = stats.reduce((sum, p) => sum + (p.contract_value || 0), 0);
+                }
+                
+                // Load outstanding amount
+                const { data: payments } = await supabase
+                    .from('payments')
+                    .select('amount, project_id')
+                    .eq('status', 'completed');
+                
+                const paidByProject = {};
+                payments?.forEach(p => {
+                    paidByProject[p.project_id] = (paidByProject[p.project_id] || 0) + p.amount;
+                });
+                
+                this.stats.outstanding = stats?.reduce((sum, p) => {
+                    const paid = paidByProject[p.id] || 0;
+                    return sum + ((p.contract_value || 0) - paid);
+                }, 0) || 0;
+                
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        },
+        
+        getStatusColor(status) {
+            return STATUS_COLORS[status] || 'bg-gray-100 text-gray-800';
+        },
+        
+        canEdit(project) {
+            if (currentUser.role === 'admin') return true;
+            if (currentUser.role === 'acc') {
+                // ACC can only edit certain fields
+                return true;
+            }
+            if (currentUser.role === 'pm' && project.pm_id === currentUser.id) {
+                return true;
+            }
+            return false;
+        },
+        
+        viewProject(project) {
+            window.viewProjectDetail(project);
+        },
+        
+        editProject(project) {
+            window.editProjectForm(project);
+        },
+        
+        viewPayments(project) {
+            // Navigate to payments page with project filter
+            window.location.hash = `#payments?project=${project.id}`;
+            navigate('payments');
+        },
+        
+        async exportProjects() {
+            try {
+                const data = this.projects.map(p => ({
+                    'Mã HĐ': p.code,
+                    'Tên hợp đồng': p.name,
+                    'Khách hàng': p.customer_name,
+                    'PM': p.pm_name || '',
+                    'Giá trị HĐ': p.contract_value || 0,
+                    'Ngân sách': p.budget || 0,
+                    'Đã thu': p.contract_value - (p.outstanding_amount || 0),
+                    'Còn lại': p.outstanding_amount || 0,
+                    'Giờ ước tính': p.hours_estimated || 0,
+                    'Giờ thực tế': p.hours_actual || 0,
+                    'Tiến độ (%)': (p.progress_percent || 0).toFixed(1),
+                    'Trạng thái': CONFIG.PROJECT_STATUS_NAMES[p.status],
+                    'Ngày bắt đầu': formatDate(p.start_date),
+                    'Ngày kết thúc': p.end_date ? formatDate(p.end_date) : '',
+                    'Ghi chú': p.notes || ''
+                }));
+                
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Projects');
+                
+                XLSX.writeFile(wb, `Projects_${formatDate(new Date(), 'YYYYMMDD')}.xlsx`);
+                showToast('Xuất file thành công', 'success');
+                
+            } catch (error) {
+                console.error('Error exporting projects:', error);
+                showToast('Lỗi xuất file', 'error');
+            }
+        }
+    };
+}
+
+// View project detail
+async function viewProjectDetail(project) {
+    const modal = document.getElementById('projectDetailModal');
+    const content = document.getElementById('projectDetailContent');
+    
+    content.innerHTML = '<p class="text-center">Đang tải...</p>';
+    modal.classList.remove('hidden');
+    
+    try {
+        // Load tasks count
+        const { count: tasksCount } = await supabase
+            .from('tasks')
+            .select('id', { count: 'exact', head: true })
+            .eq('project_id', project.id)
+            .is('deleted_at', null);
+        
+        // Load payments
+        const { data: payments } = await supabase
+            .from('payments')
+            .select('*')
+            .eq('project_id', project.id)
+            .order('paid_date', { ascending: false });
+        
+        const totalPaid = payments?.reduce((sum, p) => sum + (p.amount || 0), 0) || 0;
+        
+        content.innerHTML = `
+            <div class="grid grid-cols-2 gap-6">
+                <!-- Left Column -->
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Thông tin cơ bản</h3>
+                        <dl class="mt-2 space-y-2">
+                            <div>
+                                <dt class="text-sm text-gray-600">Mã hợp đồng:</dt>
+                                <dd class="text-sm font-medium">${project.code}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Tên hợp đồng:</dt>
+                                <dd class="text-sm font-medium">${project.name}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Khách hàng:</dt>
+                                <dd class="text-sm font-medium">${project.customer_name}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">PM phụ trách:</dt>
+                                <dd class="text-sm font-medium">${project.pm_name || 'Chưa gán'}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Trạng thái:</dt>
+                                <dd>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[project.status]}">
+                                        ${CONFIG.PROJECT_STATUS_NAMES[project.status]}
+                                    </span>
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Thời gian</h3>
+                        <dl class="mt-2 space-y-2">
+                            <div>
+                                <dt class="text-sm text-gray-600">Ngày bắt đầu:</dt>
+                                <dd class="text-sm font-medium">${formatDate(project.start_date)}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Ngày kết thúc:</dt>
+                                <dd class="text-sm font-medium">${project.end_date ? formatDate(project.end_date) : 'Không xác định'}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Số công việc:</dt>
+                                <dd class="text-sm font-medium">${tasksCount || 0} tasks</dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+                
+                <!-- Right Column -->
+                <div class="space-y-4">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Tài chính</h3>
+                        <dl class="mt-2 space-y-2">
+                            <div>
+                                <dt class="text-sm text-gray-600">Giá trị hợp đồng:</dt>
+                                <dd class="text-sm font-medium text-green-600">${formatCurrency(project.contract_value)}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Ngân sách:</dt>
+                                <dd class="text-sm font-medium">${formatCurrency(project.budget)}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Đã thanh toán:</dt>
+                                <dd class="text-sm font-medium text-blue-600">${formatCurrency(totalPaid)}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Còn lại:</dt>
+                                <dd class="text-sm font-medium text-orange-600">${formatCurrency((project.contract_value || 0) - totalPaid)}</dd>
+                            </div>
+                        </dl>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500">Tiến độ</h3>
+                        <dl class="mt-2 space-y-2">
+                            <div>
+                                <dt class="text-sm text-gray-600">Giờ ước tính:</dt>
+                                <dd class="text-sm font-medium">${project.hours_estimated || 0} giờ</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Giờ thực tế:</dt>
+                                <dd class="text-sm font-medium">${project.hours_actual || 0} giờ</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Tiến độ:</dt>
+                                <dd>
+                                    <div class="flex items-center space-x-2">
+                                        <div class="flex-1 bg-gray-200 rounded-full h-2">
+                                            <div class="bg-blue-600 h-2 rounded-full" style="width: ${Math.min(100, project.progress_percent || 0)}%"></div>
+                                        </div>
+                                        <span class="text-sm font-medium">${(project.progress_percent || 0).toFixed(1)}%</span>
+                                    </div>
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Milestone Text -->
+            ${project.milestone_text ? `
+                <div>
+                    <h3 class="text-sm font-medium text-gray-500 mb-2">Điều kiện thanh toán</h3>
+                    <div class="bg-gray-50 p-3 rounded-lg">
+                        <pre class="text-sm text-gray-700 whitespace-pre-wrap">${project.milestone_text}</pre>
+                    </div>
+                </div>
+            ` : ''}
+            
+            <!-- Notes -->
+            ${project.notes ? `
+                <div>
+                    <h3 class="text-sm font-medium text-gray-500 mb-2">Ghi chú</h3>
+                    <p class="text-sm text-gray-700">${project.notes}</p>
+                </div>
+            ` : ''}
+            
+            <!-- Action Buttons -->
+            <div class="flex justify-end space-x-3 pt-4 border-t">
+                <button onclick="navigate('tasks'); router.updateParams({project: '${project.id}'})" 
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="lucide-check-square w-4 h-4 inline mr-2"></i>
+                    Xem công việc
+                </button>
+                <button onclick="navigate('payments'); router.updateParams({project: '${project.id}'})" 
+                        class="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700">
+                    <i class="lucide-credit-card w-4 h-4 inline mr-2"></i>
+                    Xem thanh toán
+                </button>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading project detail:', error);
+        content.innerHTML = '<p class="text-red-600">Lỗi tải thông tin hợp đồng</p>';
+    }
+}
+
+// Close project detail modal
+function closeProjectDetailModal() {
+    document.getElementById('projectDetailModal').classList.add('hidden');
+}
+
+// Show create project modal
+async function showCreateProjectModal() {
+    document.getElementById('projectFormTitle').textContent = 'Tạo hợp đồng mới';
+    document.getElementById('projectSubmitText').textContent = 'Tạo hợp đồng';
+    document.getElementById('projectForm').reset();
+    document.getElementById('projectId').value = '';
+    
+    await loadProjectFormSelects();
+    
+    document.getElementById('projectFormModal').classList.remove('hidden');
+}
+
+// Edit project form
+async function editProjectForm(project) {
+    document.getElementById('projectFormTitle').textContent = 'Chỉnh sửa hợp đồng';
+    document.getElementById('projectSubmitText').textContent = 'Cập nhật';
+    
+    await loadProjectFormSelects();
+    
+    // Fill form
+    document.getElementById('projectId').value = project.id;
+    document.getElementById('projectCode').value = project.code;
+    document.getElementById('projectName').value = project.name;
+    document.getElementById('projectCustomerId').value = project.customer_id;
+    document.getElementById('projectPmId').value = project.pm_id || '';
+    document.getElementById('projectContractValue').value = project.contract_value || '';
+    document.getElementById('projectBudget').value = project.budget || '';
+    document.getElementById('projectMilestoneText').value = project.milestone_text || '';
+    document.getElementById('projectBillingContact').value = project.billing_contact || '';
+    document.getElementById('projectInvoiceProfile').value = project.invoice_profile || '';
+    document.getElementById('projectStatus').value = project.status;
+    document.getElementById('projectStartDate').value = project.start_date;
+    document.getElementById('projectEndDate').value = project.end_date || '';
+    document.getElementById('projectHoursEstimated').value = project.hours_estimated || '';
+    document.getElementById('projectNotes').value = project.notes || '';
+    
+    // Disable fields for ACC role
+    if (currentUser.role === 'acc') {
+        document.getElementById('projectContractValue').disabled = true;
+        document.getElementById('projectBudget').disabled = true;
+        document.getElementById('projectHoursEstimated').disabled = true;
+        if (project.pm_id) {
+            document.getElementById('projectPmId').disabled = true;
+        }
+    }
+    
+    document.getElementById('projectFormModal').classList.remove('hidden');
+}
+
+// Load form selects
+async function loadProjectFormSelects() {
+    try {
+        // Load customers
+        const { data: customers } = await supabase
+            .from('customers')
+            .select('id, name')
+            .is('deleted_at', null)
+            .order('name');
+        
+        const customerSelect = document.getElementById('projectCustomerId');
+        customerSelect.innerHTML = '<option value="">Chọn khách hàng</option>';
+        customers?.forEach(c => {
+            customerSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+        });
+        
+        // Load PMs
+        const { data: pms } = await supabase
+            .from('user_profiles')
+            .select('id, full_name, employee_code')
+            .eq('role', 'pm')
+            .eq('is_active', true)
+            .order('full_name');
+        
+        const pmSelect = document.getElementById('projectPmId');
+        pmSelect.innerHTML = '<option value="">Chưa gán</option>';
+        pms?.forEach(pm => {
+            pmSelect.innerHTML += `<option value="${pm.id}">${pm.full_name} (${pm.employee_code})</option>`;
+        });
+        
+    } catch (error) {
+        console.error('Error loading form selects:', error);
+    }
+}
+
+// Close project form modal
+function closeProjectFormModal() {
+    document.getElementById('projectFormModal').classList.add('hidden');
+}
+
+// Handle project form submit
+document.getElementById('projectForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const projectId = document.getElementById('projectId').value;
+    const projectData = {
+        name: document.getElementById('projectName').value,
+        customer_id: document.getElementById('projectCustomerId').value,
+        pm_id: document.getElementById('projectPmId').value || null,
+        contract_value: parseInt(document.getElementById('projectContractValue').value) || null,
+        budget: parseInt(document.getElementById('projectBudget').value) || null,
+        milestone_text: document.getElementById('projectMilestoneText').value || null,
+        billing_contact: document.getElementById('projectBillingContact').value || null,
+        invoice_profile: document.getElementById('projectInvoiceProfile').value || null,
+        status: document.getElementById('projectStatus').value,
+        start_date: document.getElementById('projectStartDate').value,
+        end_date: document.getElementById('projectEndDate').value || null,
+        hours_estimated: parseInt(document.getElementById('projectHoursEstimated').value) || 0,
+        notes: document.getElementById('projectNotes').value || null
+    };
+    
+    try {
+        if (projectId) {
+            // Update existing project
+            const updateData = { ...projectData };
+            
+            // ACC role restrictions
+            if (currentUser.role === 'acc') {
+                delete updateData.contract_value;
+                delete updateData.budget;
+                delete updateData.hours_estimated;
+                // Don't update pm_id if already set
+                const { data: currentProject } = await supabase
+                    .from('projects')
+                    .select('pm_id')
+                    .eq('id', projectId)
+                    .single();
+                
+                if (currentProject?.pm_id) {
+                    delete updateData.pm_id;
+                }
+            }
+            
+            const { error } = await supabase
+                .from('projects')
+                .update(updateData)
+                .eq('id', projectId);
+            
+            if (error) throw error;
+            showToast('Cập nhật hợp đồng thành công', 'success');
+        } else {
+            // Create new project
+            projectData.created_by = currentUser.id;
+            
+            const { error } = await supabase
+                .from('projects')
+                .insert(projectData);
+            
+            if (error) throw error;
+            showToast('Tạo hợp đồng thành công', 'success');
+        }
+        
+        closeProjectFormModal();
+        location.reload(); // Simple reload
+        
+    } catch (error) {
+        console.error('Error saving project:', error);
+        showToast('Lỗi: ' + error.message, 'error');
+    }
+});
+</script>

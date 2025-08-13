@@ -1,0 +1,617 @@
+<!-- Customers Management Page -->
+<div class="space-y-6" x-data="customersPage()">
+    <!-- Page Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Quản lý Khách hàng</h1>
+                <p class="text-gray-600 mt-1">Danh sách khách hàng và đối tác</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex space-x-3">
+                <!-- Create Customer Button (Admin only) -->
+                <button @click="showCreateModal()" 
+                        class="role-admin inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <i class="lucide-plus w-4 h-4 mr-2"></i>
+                    Thêm khách hàng
+                </button>
+                
+                <!-- Export Button -->
+                <button @click="exportCustomers()" 
+                        class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">
+                    <i class="lucide-download w-4 h-4 mr-2"></i>
+                    Xuất Excel
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Search and Filter -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex flex-col md:flex-row gap-4">
+            <div class="flex-1">
+                <div class="relative">
+                    <input type="text" 
+                           x-model="searchQuery" 
+                           @input.debounce.500ms="loadCustomers()"
+                           placeholder="Tìm kiếm theo tên, MST, người liên hệ..."
+                           class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <i class="lucide-search w-5 h-5 text-gray-400 absolute left-3 top-2.5"></i>
+                </div>
+            </div>
+            <div class="flex gap-2">
+                <button @click="resetFilters()" 
+                        class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+                    <i class="lucide-refresh-cw w-4 h-4 inline mr-2"></i>
+                    Làm mới
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Customers Grid/List -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" x-show="!loading && customers.length > 0">
+        <template x-for="customer in customers" :key="customer.id">
+            <div class="bg-white rounded-lg shadow hover:shadow-lg transition-shadow cursor-pointer" 
+                 @click="viewCustomer(customer)">
+                <div class="p-6">
+                    <div class="flex items-start justify-between mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-semibold text-gray-900" x-text="customer.name"></h3>
+                            <p class="text-sm text-gray-500 mt-1">
+                                MST: <span class="font-mono" x-text="customer.tax_code || 'N/A'"></span>
+                            </p>
+                        </div>
+                        <div class="flex space-x-1">
+                            <button @click.stop="editCustomer(customer)" 
+                                    class="role-admin p-1 text-blue-600 hover:text-blue-900">
+                                <i class="lucide-edit w-4 h-4"></i>
+                            </button>
+                            <button @click.stop="deleteCustomer(customer)" 
+                                    class="role-admin p-1 text-red-600 hover:text-red-900">
+                                <i class="lucide-trash-2 w-4 h-4"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="space-y-2 text-sm">
+                        <div class="flex items-start">
+                            <i class="lucide-map-pin w-4 h-4 text-gray-400 mt-0.5 mr-2"></i>
+                            <span class="text-gray-600 line-clamp-2" x-text="customer.address || 'Chưa có địa chỉ'"></span>
+                        </div>
+                        
+                        <div class="flex items-center">
+                            <i class="lucide-user w-4 h-4 text-gray-400 mr-2"></i>
+                            <span class="text-gray-600" x-text="customer.contact_name || 'Chưa có'"></span>
+                        </div>
+                        
+                        <div class="flex items-center">
+                            <i class="lucide-phone w-4 h-4 text-gray-400 mr-2"></i>
+                            <span class="text-gray-600" x-text="customer.contact_phone || 'Chưa có'"></span>
+                        </div>
+                        
+                        <div class="flex items-center">
+                            <i class="lucide-mail w-4 h-4 text-gray-400 mr-2"></i>
+                            <span class="text-gray-600 truncate" x-text="customer.contact_email || 'Chưa có'"></span>
+                        </div>
+                    </div>
+                    
+                    <div class="mt-4 pt-4 border-t flex items-center justify-between">
+                        <div>
+                            <p class="text-xs text-gray-500">Số hợp đồng</p>
+                            <p class="text-lg font-semibold text-blue-600" x-text="customer.projects_count || 0"></p>
+                        </div>
+                        <div>
+                            <p class="text-xs text-gray-500">Tổng giá trị</p>
+                            <p class="text-sm font-semibold text-green-600" x-text="formatCurrency(customer.total_value || 0)"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </template>
+    </div>
+    
+    <!-- Loading State -->
+    <div x-show="loading" class="flex justify-center py-12">
+        <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            <p class="mt-4 text-gray-600">Đang tải danh sách khách hàng...</p>
+        </div>
+    </div>
+    
+    <!-- Empty State -->
+    <div x-show="!loading && customers.length === 0" class="bg-white rounded-lg shadow p-12">
+        <div class="text-center">
+            <i class="lucide-users w-16 h-16 text-gray-300 mx-auto mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Không tìm thấy khách hàng</h3>
+            <p class="text-gray-500">Thử thay đổi từ khóa tìm kiếm hoặc thêm khách hàng mới</p>
+        </div>
+    </div>
+</div>
+
+<!-- Customer Detail Modal -->
+<div id="customerDetailModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-3xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Chi tiết khách hàng</h3>
+            <button onclick="closeCustomerDetailModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        <div id="customerDetailContent">
+            <!-- Content will be loaded dynamically -->
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Customer Modal -->
+<div id="customerFormModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 id="customerFormTitle" class="text-lg font-medium text-gray-900">Thêm khách hàng mới</h3>
+            <button onclick="closeCustomerFormModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        
+        <form id="customerForm" class="space-y-4">
+            <input type="hidden" id="customerId">
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Tên công ty *</label>
+                <input type="text" id="customerName" required maxlength="200"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Mã số thuế</label>
+                <input type="text" id="customerTaxCode" maxlength="20" pattern="[0-9]{10,13}"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                       placeholder="10-13 chữ số">
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Địa chỉ</label>
+                <textarea id="customerAddress" rows="2"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Người liên hệ</label>
+                    <input type="text" id="customerContactName" maxlength="100"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Số điện thoại</label>
+                    <input type="tel" id="customerContactPhone" maxlength="20"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="09xx xxx xxx">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Email liên hệ</label>
+                    <input type="email" id="customerContactEmail" maxlength="100"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Website</label>
+                    <input type="url" id="customerWebsite" maxlength="200"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="https://...">
+                </div>
+            </div>
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Ghi chú</label>
+                <textarea id="customerNote" rows="3"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4 border-t">
+                <button type="button" onclick="closeCustomerFormModal()"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+                    Hủy
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <span id="customerSubmitText">Thêm khách hàng</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Alpine.js Customers Page Component
+function customersPage() {
+    return {
+        customers: [],
+        loading: false,
+        searchQuery: '',
+        
+        async init() {
+            await this.loadCustomers();
+        },
+        
+        async loadCustomers() {
+            this.loading = true;
+            
+            try {
+                let query = supabase
+                    .from('customers')
+                    .select(`
+                        *,
+                        projects:projects(count)
+                    `)
+                    .is('deleted_at', null)
+                    .order('name');
+                
+                if (this.searchQuery) {
+                    query = query.or(`name.ilike.%${this.searchQuery}%,tax_code.ilike.%${this.searchQuery}%,contact_name.ilike.%${this.searchQuery}%`);
+                }
+                
+                const { data: customers, error } = await query;
+                
+                if (error) throw error;
+                
+                // Calculate total value for each customer
+                for (const customer of customers || []) {
+                    const { data: projects } = await supabase
+                        .from('projects')
+                        .select('contract_value')
+                        .eq('customer_id', customer.id)
+                        .is('deleted_at', null);
+                    
+                    customer.projects_count = projects?.length || 0;
+                    customer.total_value = projects?.reduce((sum, p) => sum + (p.contract_value || 0), 0) || 0;
+                }
+                
+                this.customers = customers || [];
+                
+            } catch (error) {
+                console.error('Error loading customers:', error);
+                showToast('Lỗi tải danh sách khách hàng', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        viewCustomer(customer) {
+            window.viewCustomerDetail(customer);
+        },
+        
+        editCustomer(customer) {
+            window.editCustomerForm(customer);
+        },
+        
+        async deleteCustomer(customer) {
+            if (!confirm(`Bạn có chắc chắn muốn xóa khách hàng "${customer.name}"?`)) return;
+            
+            try {
+                // Check if customer has projects
+                const { count } = await supabase
+                    .from('projects')
+                    .select('id', { count: 'exact', head: true })
+                    .eq('customer_id', customer.id)
+                    .is('deleted_at', null);
+                
+                if (count > 0) {
+                    showToast('Không thể xóa khách hàng đang có hợp đồng', 'error');
+                    return;
+                }
+                
+                // Soft delete
+                const { error } = await supabase
+                    .from('customers')
+                    .update({ deleted_at: new Date().toISOString() })
+                    .eq('id', customer.id);
+                
+                if (error) throw error;
+                
+                showToast('Xóa khách hàng thành công', 'success');
+                await this.loadCustomers();
+                
+            } catch (error) {
+                console.error('Error deleting customer:', error);
+                showToast('Lỗi: ' + error.message, 'error');
+            }
+        },
+        
+        showCreateModal() {
+            window.showCreateCustomerModal();
+        },
+        
+        resetFilters() {
+            this.searchQuery = '';
+            this.loadCustomers();
+        },
+        
+        async exportCustomers() {
+            try {
+                const data = this.customers.map(c => ({
+                    'Tên công ty': c.name,
+                    'Mã số thuế': c.tax_code || '',
+                    'Địa chỉ': c.address || '',
+                    'Người liên hệ': c.contact_name || '',
+                    'Số điện thoại': c.contact_phone || '',
+                    'Email': c.contact_email || '',
+                    'Website': c.website || '',
+                    'Số hợp đồng': c.projects_count || 0,
+                    'Tổng giá trị': c.total_value || 0,
+                    'Ghi chú': c.note || ''
+                }));
+                
+                const ws = XLSX.utils.json_to_sheet(data);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Customers');
+                
+                XLSX.writeFile(wb, `Customers_${formatDate(new Date(), 'YYYYMMDD')}.xlsx`);
+                showToast('Xuất file thành công', 'success');
+                
+            } catch (error) {
+                console.error('Error exporting customers:', error);
+                showToast('Lỗi xuất file', 'error');
+            }
+        }
+    };
+}
+
+// View customer detail
+async function viewCustomerDetail(customer) {
+    const modal = document.getElementById('customerDetailModal');
+    const content = document.getElementById('customerDetailContent');
+    
+    content.innerHTML = '<p class="text-center">Đang tải...</p>';
+    modal.classList.remove('hidden');
+    
+    try {
+        // Load projects for this customer
+        const { data: projects } = await supabase
+            .from('projects')
+            .select(`
+                *,
+                pm:user_profiles!pm_id(full_name)
+            `)
+            .eq('customer_id', customer.id)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false });
+        
+        const totalValue = projects?.reduce((sum, p) => sum + (p.contract_value || 0), 0) || 0;
+        
+        content.innerHTML = `
+            <div class="space-y-6">
+                <!-- Customer Information -->
+                <div class="grid grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 mb-3">Thông tin công ty</h3>
+                        <dl class="space-y-2">
+                            <div>
+                                <dt class="text-sm text-gray-600">Tên công ty:</dt>
+                                <dd class="text-sm font-medium text-gray-900">${customer.name}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Mã số thuế:</dt>
+                                <dd class="text-sm font-medium text-gray-900">${customer.tax_code || 'Chưa có'}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Địa chỉ:</dt>
+                                <dd class="text-sm text-gray-900">${customer.address || 'Chưa có'}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Website:</dt>
+                                <dd class="text-sm text-gray-900">
+                                    ${customer.website ? `<a href="${customer.website}" target="_blank" class="text-blue-600 hover:text-blue-800">${customer.website}</a>` : 'Chưa có'}
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 mb-3">Thông tin liên hệ</h3>
+                        <dl class="space-y-2">
+                            <div>
+                                <dt class="text-sm text-gray-600">Người liên hệ:</dt>
+                                <dd class="text-sm font-medium text-gray-900">${customer.contact_name || 'Chưa có'}</dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Số điện thoại:</dt>
+                                <dd class="text-sm font-medium text-gray-900">
+                                    ${customer.contact_phone ? `<a href="tel:${customer.contact_phone}" class="text-blue-600">${customer.contact_phone}</a>` : 'Chưa có'}
+                                </dd>
+                            </div>
+                            <div>
+                                <dt class="text-sm text-gray-600">Email:</dt>
+                                <dd class="text-sm text-gray-900">
+                                    ${customer.contact_email ? `<a href="mailto:${customer.contact_email}" class="text-blue-600">${customer.contact_email}</a>` : 'Chưa có'}
+                                </dd>
+                            </div>
+                        </dl>
+                    </div>
+                </div>
+                
+                <!-- Notes -->
+                ${customer.note ? `
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">Ghi chú</h3>
+                        <p class="text-sm text-gray-700 bg-gray-50 p-3 rounded-lg">${customer.note}</p>
+                    </div>
+                ` : ''}
+                
+                <!-- Projects List -->
+                <div>
+                    <div class="flex items-center justify-between mb-3">
+                        <h3 class="text-sm font-medium text-gray-500">Danh sách hợp đồng (${projects?.length || 0})</h3>
+                        <span class="text-sm font-medium text-green-600">Tổng: ${formatCurrency(totalValue)}</span>
+                    </div>
+                    
+                    ${projects && projects.length > 0 ? `
+                        <div class="border rounded-lg overflow-hidden">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Mã HĐ</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Tên hợp đồng</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">PM</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Giá trị</th>
+                                        <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Trạng thái</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="bg-white divide-y divide-gray-200">
+                                    ${projects.map(p => `
+                                        <tr class="hover:bg-gray-50">
+                                            <td class="px-4 py-2 text-sm font-mono">${p.code}</td>
+                                            <td class="px-4 py-2 text-sm">${p.name}</td>
+                                            <td class="px-4 py-2 text-sm">${p.pm?.full_name || 'Chưa gán'}</td>
+                                            <td class="px-4 py-2 text-sm font-medium">${formatCurrency(p.contract_value)}</td>
+                                            <td class="px-4 py-2">
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[p.status]}">
+                                                    ${CONFIG.PROJECT_STATUS_NAMES[p.status]}
+                                                </span>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    ` : `
+                        <div class="text-center py-6 bg-gray-50 rounded-lg">
+                            <p class="text-sm text-gray-500">Chưa có hợp đồng nào</p>
+                        </div>
+                    `}
+                </div>
+                
+                <!-- Metadata -->
+                <div class="text-xs text-gray-500 border-t pt-4">
+                    <p>Ngày tạo: ${formatDateTime(customer.created_at)}</p>
+                    <p>Cập nhật lần cuối: ${formatDateTime(customer.updated_at)}</p>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading customer detail:', error);
+        content.innerHTML = '<p class="text-red-600">Lỗi tải thông tin khách hàng</p>';
+    }
+}
+
+// Close customer detail modal
+function closeCustomerDetailModal() {
+    document.getElementById('customerDetailModal').classList.add('hidden');
+}
+
+// Show create customer modal
+function showCreateCustomerModal() {
+    document.getElementById('customerFormTitle').textContent = 'Thêm khách hàng mới';
+    document.getElementById('customerSubmitText').textContent = 'Thêm khách hàng';
+    document.getElementById('customerForm').reset();
+    document.getElementById('customerId').value = '';
+    
+    document.getElementById('customerFormModal').classList.remove('hidden');
+}
+
+// Edit customer form
+function editCustomerForm(customer) {
+    document.getElementById('customerFormTitle').textContent = 'Chỉnh sửa khách hàng';
+    document.getElementById('customerSubmitText').textContent = 'Cập nhật';
+    
+    // Fill form
+    document.getElementById('customerId').value = customer.id;
+    document.getElementById('customerName').value = customer.name;
+    document.getElementById('customerTaxCode').value = customer.tax_code || '';
+    document.getElementById('customerAddress').value = customer.address || '';
+    document.getElementById('customerContactName').value = customer.contact_name || '';
+    document.getElementById('customerContactPhone').value = customer.contact_phone || '';
+    document.getElementById('customerContactEmail').value = customer.contact_email || '';
+    document.getElementById('customerWebsite').value = customer.website || '';
+    document.getElementById('customerNote').value = customer.note || '';
+    
+    document.getElementById('customerFormModal').classList.remove('hidden');
+}
+
+// Close customer form modal
+function closeCustomerFormModal() {
+    document.getElementById('customerFormModal').classList.add('hidden');
+}
+
+// Handle customer form submit
+document.getElementById('customerForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const customerId = document.getElementById('customerId').value;
+    const customerData = {
+        name: document.getElementById('customerName').value,
+        tax_code: document.getElementById('customerTaxCode').value || null,
+        address: document.getElementById('customerAddress').value || null,
+        contact_name: document.getElementById('customerContactName').value || null,
+        contact_phone: document.getElementById('customerContactPhone').value || null,
+        contact_email: document.getElementById('customerContactEmail').value || null,
+        website: document.getElementById('customerWebsite').value || null,
+        note: document.getElementById('customerNote').value || null
+    };
+    
+    // Validate phone
+    if (customerData.contact_phone && !CONFIG.VALIDATION.PHONE_REGEX.test(customerData.contact_phone)) {
+        showToast('Số điện thoại không hợp lệ', 'error');
+        return;
+    }
+    
+    // Validate email
+    if (customerData.contact_email && !CONFIG.VALIDATION.EMAIL_REGEX.test(customerData.contact_email)) {
+        showToast('Email không hợp lệ', 'error');
+        return;
+    }
+    
+    // Validate tax code
+    if (customerData.tax_code && !CONFIG.VALIDATION.TAX_CODE_REGEX.test(customerData.tax_code)) {
+        showToast('Mã số thuế không hợp lệ (10-13 chữ số)', 'error');
+        return;
+    }
+    
+    try {
+        if (customerId) {
+            // Update existing customer
+            const { error } = await supabase
+                .from('customers')
+                .update({
+                    ...customerData,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', customerId);
+            
+            if (error) throw error;
+            showToast('Cập nhật khách hàng thành công', 'success');
+        } else {
+            // Create new customer
+            customerData.created_by = currentUser.id;
+            
+            const { error } = await supabase
+                .from('customers')
+                .insert(customerData);
+            
+            if (error) throw error;
+            showToast('Thêm khách hàng thành công', 'success');
+        }
+        
+        closeCustomerFormModal();
+        // Reload customers
+        location.reload(); // Simple reload for now
+        
+    } catch (error) {
+        console.error('Error saving customer:', error);
+        
+        // Check for unique constraint violation
+        if (error.message?.includes('duplicate key')) {
+            if (error.message.includes('tax_code')) {
+                showToast('Mã số thuế đã tồn tại', 'error');
+            } else {
+                showToast('Dữ liệu bị trùng lặp', 'error');
+            }
+        } else {
+            showToast('Lỗi: ' + error.message, 'error');
+        }
+    }
+});
+</script>
