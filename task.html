@@ -1,0 +1,1116 @@
+<!-- Tasks Management Page -->
+<div class="space-y-6" x-data="tasksPage()">
+    <!-- Page Header -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Quản lý Công việc</h1>
+                <p class="text-gray-600 mt-1">Theo dõi và cập nhật tiến độ công việc</p>
+            </div>
+            <div class="mt-4 md:mt-0 flex flex-col sm:flex-row gap-3">
+                <!-- Create Task Button (PM/Admin only) -->
+                <button onclick="showCreateTaskModal()" 
+                        class="role-pm role-admin inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+                    <i class="lucide-plus w-4 h-4 mr-2"></i>
+                    Tạo công việc mới
+                </button>
+                
+                <!-- Export Button -->
+                <button onclick="exportTasks()" 
+                        class="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors">
+                    <i class="lucide-download w-4 h-4 mr-2"></i>
+                    Xuất Excel
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Filters -->
+    <div class="bg-white shadow rounded-lg p-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <!-- Project Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Hợp đồng</label>
+                <select x-model="filters.project" @change="loadTasks()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Tất cả hợp đồng</option>
+                    <template x-for="project in projects" :key="project.id">
+                        <option :value="project.id" x-text="project.name"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <!-- Assignee Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Người thực hiện</label>
+                <select x-model="filters.assignee" @change="loadTasks()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Tất cả</option>
+                    <option value="me">Công việc của tôi</option>
+                    <template x-for="user in users" :key="user.id">
+                        <option :value="user.id" x-text="user.full_name"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <!-- Status Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Trạng thái</label>
+                <select x-model="filters.status" @change="loadTasks()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Tất cả trạng thái</option>
+                    <template x-for="(name, key) in taskStatusNames" :key="key">
+                        <option :value="key" x-text="name"></option>
+                    </template>
+                </select>
+            </div>
+            
+            <!-- Priority Filter -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">Độ ưu tiên</label>
+                <select x-model="filters.priority" @change="loadTasks()" 
+                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Tất cả</option>
+                    <template x-for="(name, key) in taskPriorityNames" :key="key">
+                        <option :value="key" x-text="name"></option>
+                    </template>
+                </select>
+            </div>
+        </div>
+        
+        <!-- Search Bar -->
+        <div class="mt-4">
+            <div class="relative">
+                <input type="text" 
+                       x-model="searchQuery" 
+                       @input.debounce.500ms="loadTasks()"
+                       placeholder="Tìm kiếm theo tiêu đề hoặc mô tả..."
+                       class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <i class="lucide-search w-5 h-5 text-gray-400 absolute left-3 top-2.5"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Tasks List -->
+    <div class="bg-white shadow rounded-lg">
+        <!-- Loading State -->
+        <div x-show="loading" class="p-12 text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+            <p class="mt-4 text-gray-600">Đang tải danh sách công việc...</p>
+        </div>
+        
+        <!-- Tasks Table -->
+        <div x-show="!loading && tasks.length > 0" class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-gray-200">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Công việc
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Hợp đồng
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Người thực hiện
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Trạng thái
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Ưu tiên
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Thời gian
+                        </th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Hạn chót
+                        </th>
+                        <th class="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            Thao tác
+                        </th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200">
+                    <template x-for="task in tasks" :key="task.id">
+                        <tr class="hover:bg-gray-50 cursor-pointer" @click="viewTask(task.id)">
+                            <td class="px-6 py-4">
+                                <div class="flex items-start">
+                                    <div class="flex-1">
+                                        <p class="text-sm font-medium text-gray-900" x-text="task.title"></p>
+                                        <p class="text-xs text-gray-500 mt-1 line-clamp-2" x-text="task.description"></p>
+                                        <div class="flex items-center mt-2 space-x-4">
+                                            <!-- Comments badge -->
+                                            <span x-show="task.comments_count > 0" class="inline-flex items-center text-xs text-gray-500">
+                                                <i class="lucide-message-circle w-3 h-3 mr-1"></i>
+                                                <span x-text="task.comments_count"></span>
+                                            </span>
+                                            <!-- Subtasks indicator -->
+                                            <span x-show="task.has_subtasks" class="inline-flex items-center text-xs text-gray-500">
+                                                <i class="lucide-git-branch w-3 h-3 mr-1"></i>
+                                                Có subtasks
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-900" x-text="task.project?.name || 'N/A'"></p>
+                                <p class="text-xs text-gray-500" x-text="task.project?.code"></p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <p class="text-sm text-gray-900" x-text="task.assignee?.full_name || 'Chưa gán'"></p>
+                                <p class="text-xs text-gray-500" x-text="task.assignee?.employee_code"></p>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                      :class="getStatusColor(task.status)">
+                                    <span x-text="taskStatusNames[task.status]"></span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
+                                      :class="getPriorityColor(task.priority)">
+                                    <span x-text="taskPriorityNames[task.priority]"></span>
+                                </span>
+                            </td>
+                            <td class="px-6 py-4">
+                                <div class="text-sm text-gray-900">
+                                    <span x-text="task.actual_hours || 0"></span>/<span x-text="task.estimate_hours || 0"></span>h
+                                </div>
+                                <div class="w-24 bg-gray-200 rounded-full h-1.5 mt-1">
+                                    <div class="bg-blue-600 h-1.5 rounded-full" 
+                                         :style="`width: ${Math.min(100, (task.actual_hours / task.estimate_hours) * 100 || 0)}%`"></div>
+                                </div>
+                            </td>
+                            <td class="px-6 py-4">
+                                <template x-if="task.due_date">
+                                    <div>
+                                        <p class="text-sm text-gray-900" x-text="formatDate(task.due_date)"></p>
+                                        <p class="text-xs" :class="getDueDateColor(task.due_date)" x-text="getDaysLeft(task.due_date)"></p>
+                                    </div>
+                                </template>
+                                <span x-show="!task.due_date" class="text-sm text-gray-400">--</span>
+                            </td>
+                            <td class="px-6 py-4 text-center" @click.stop="">
+                                <div class="flex items-center justify-center space-x-2">
+                                    <!-- Update Status (for assignee) -->
+                                    <template x-if="canUpdateStatus(task)">
+                                        <button @click="showUpdateStatusModal(task)" 
+                                                class="text-blue-600 hover:text-blue-900">
+                                            <i class="lucide-edit-3 w-4 h-4"></i>
+                                        </button>
+                                    </template>
+                                    
+                                    <!-- Edit (for PM/Admin) -->
+                                    <template x-if="canEditTask(task)">
+                                        <button @click="showEditTaskModal(task)" 
+                                                class="text-green-600 hover:text-green-900">
+                                            <i class="lucide-edit w-4 h-4"></i>
+                                        </button>
+                                    </template>
+                                    
+                                    <!-- View Details -->
+                                    <button @click="viewTask(task.id)" 
+                                            class="text-gray-600 hover:text-gray-900">
+                                        <i class="lucide-eye w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Empty State -->
+        <div x-show="!loading && tasks.length === 0" class="p-12 text-center">
+            <i class="lucide-inbox w-16 h-16 text-gray-300 mx-auto mb-4"></i>
+            <h3 class="text-lg font-medium text-gray-900 mb-2">Không tìm thấy công việc nào</h3>
+            <p class="text-gray-500">Thử thay đổi bộ lọc hoặc tạo công việc mới</p>
+        </div>
+        
+        <!-- Pagination -->
+        <div x-show="totalPages > 1" class="bg-gray-50 px-4 py-3 flex items-center justify-between border-t border-gray-200 sm:px-6">
+            <div class="flex-1 flex justify-between sm:hidden">
+                <button @click="prevPage()" :disabled="currentPage === 1"
+                        class="relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50">
+                    Trước
+                </button>
+                <button @click="nextPage()" :disabled="currentPage === totalPages"
+                        class="ml-3 relative inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50">
+                    Sau
+                </button>
+            </div>
+            <div class="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
+                <div>
+                    <p class="text-sm text-gray-700">
+                        Hiển thị <span class="font-medium" x-text="(currentPage - 1) * itemsPerPage + 1"></span> đến 
+                        <span class="font-medium" x-text="Math.min(currentPage * itemsPerPage, totalItems)"></span> trong 
+                        <span class="font-medium" x-text="totalItems"></span> kết quả
+                    </p>
+                </div>
+                <div>
+                    <nav class="relative z-0 inline-flex rounded-md shadow-sm -space-x-px">
+                        <button @click="prevPage()" :disabled="currentPage === 1"
+                                class="relative inline-flex items-center px-2 py-2 rounded-l-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+                            <i class="lucide-chevron-left w-5 h-5"></i>
+                        </button>
+                        
+                        <template x-for="page in getPageNumbers()" :key="page">
+                            <button @click="goToPage(page)" 
+                                    :class="page === currentPage ? 'bg-blue-50 border-blue-500 text-blue-600' : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'"
+                                    class="relative inline-flex items-center px-4 py-2 border text-sm font-medium"
+                                    x-text="page">
+                            </button>
+                        </template>
+                        
+                        <button @click="nextPage()" :disabled="currentPage === totalPages"
+                                class="relative inline-flex items-center px-2 py-2 rounded-r-md border border-gray-300 bg-white text-sm font-medium text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+                            <i class="lucide-chevron-right w-5 h-5"></i>
+                        </button>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Task Detail Modal -->
+<div id="taskDetailModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-4xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Chi tiết công việc</h3>
+            <button onclick="closeTaskDetailModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        <div id="taskDetailContent">
+            <!-- Content will be loaded dynamically -->
+        </div>
+    </div>
+</div>
+
+<!-- Create/Edit Task Modal -->
+<div id="taskFormModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-full max-w-2xl shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 id="taskFormTitle" class="text-lg font-medium text-gray-900">Tạo công việc mới</h3>
+            <button onclick="closeTaskFormModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        
+        <form id="taskForm" class="space-y-4">
+            <input type="hidden" id="taskId">
+            
+            <!-- Project -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Hợp đồng *</label>
+                <select id="taskProjectId" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Chọn hợp đồng</option>
+                </select>
+            </div>
+            
+            <!-- Title -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Tiêu đề *</label>
+                <input type="text" id="taskTitle" required maxlength="500"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            
+            <!-- Description -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Mô tả</label>
+                <textarea id="taskDescription" rows="3"
+                          class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500"></textarea>
+            </div>
+            
+            <!-- Assignee -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Người thực hiện</label>
+                <select id="taskAssigneeId" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Chưa gán</option>
+                </select>
+            </div>
+            
+            <!-- Parent Task (for subtasks) -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Task cha (nếu là subtask)</label>
+                <select id="taskParentId" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Không có</option>
+                </select>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Priority -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Độ ưu tiên</label>
+                    <select id="taskPriority" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                        <option value="low">Thấp</option>
+                        <option value="medium" selected>Trung bình</option>
+                        <option value="high">Cao</option>
+                    </select>
+                </div>
+                
+                <!-- Estimate Hours -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Giờ ước tính</label>
+                    <input type="number" id="taskEstimateHours" min="0" step="0.5"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <!-- Due Date -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Hạn chót</label>
+                    <input type="date" id="taskDueDate"
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                
+                <!-- Is Billable -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700">Tính phí</label>
+                    <div class="mt-2">
+                        <label class="inline-flex items-center">
+                            <input type="checkbox" id="taskIsBillable" checked
+                                   class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                            <span class="ml-2">Task có tính phí</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tags -->
+            <div>
+                <label class="block text-sm font-medium text-gray-700">Tags (phân cách bằng dấu phẩy)</label>
+                <input type="text" id="taskTags" placeholder="frontend, urgent, bug"
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            
+            <div class="flex justify-end space-x-3 pt-4">
+                <button type="button" onclick="closeTaskFormModal()"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+                    Hủy
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    <span id="submitButtonText">Tạo công việc</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Update Status Modal -->
+<div id="updateStatusModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-lg bg-white">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-medium text-gray-900">Cập nhật trạng thái</h3>
+            <button onclick="closeUpdateStatusModal()" class="text-gray-400 hover:text-gray-600">
+                <i class="lucide-x w-6 h-6"></i>
+            </button>
+        </div>
+        
+        <form id="updateStatusForm" class="space-y-4">
+            <input type="hidden" id="statusTaskId">
+            
+            <div>
+                <label class="block text-sm font-medium text-gray-700 mb-2">Trạng thái mới</label>
+                <select id="newStatus" required class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Chọn trạng thái</option>
+                </select>
+            </div>
+            
+            <div class="flex justify-end space-x-3">
+                <button type="button" onclick="closeUpdateStatusModal()"
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400">
+                    Hủy
+                </button>
+                <button type="submit"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    Cập nhật
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+// Alpine.js Tasks Page Component
+function tasksPage() {
+    return {
+        tasks: [],
+        projects: [],
+        users: [],
+        loading: false,
+        searchQuery: '',
+        filters: {
+            project: '',
+            assignee: 'me',
+            status: '',
+            priority: ''
+        },
+        currentPage: 1,
+        itemsPerPage: 20,
+        totalItems: 0,
+        totalPages: 0,
+        taskStatusNames: CONFIG.TASK_STATUS_NAMES,
+        taskPriorityNames: CONFIG.TASK_PRIORITY_NAMES,
+        
+        async init() {
+            await this.loadProjects();
+            await this.loadUsers();
+            await this.loadTasks();
+        },
+        
+        async loadProjects() {
+            try {
+                let query = supabase
+                    .from('projects')
+                    .select('id, name, code')
+                    .eq('status', 'active')
+                    .is('deleted_at', null)
+                    .order('name');
+                
+                // User can only see projects they're assigned to
+                if (currentUser.role === 'user') {
+                    const { data: userTasks } = await supabase
+                        .from('tasks')
+                        .select('project_id')
+                        .eq('assignee_id', currentUser.id)
+                        .is('deleted_at', null);
+                    
+                    const projectIds = [...new Set(userTasks?.map(t => t.project_id) || [])];
+                    if (projectIds.length > 0) {
+                        query = query.in('id', projectIds);
+                    }
+                }
+                
+                const { data: projects } = await query;
+                this.projects = projects || [];
+            } catch (error) {
+                console.error('Error loading projects:', error);
+            }
+        },
+        
+        async loadUsers() {
+            try {
+                const { data: users } = await supabase
+                    .from('user_profiles')
+                    .select('id, full_name, employee_code')
+                    .eq('is_active', true)
+                    .order('full_name');
+                
+                this.users = users || [];
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        },
+        
+        async loadTasks() {
+            this.loading = true;
+            
+            try {
+                let query = supabase
+                    .from('tasks')
+                    .select(`
+                        *,
+                        project:projects(id, name, code),
+                        assignee:user_profiles!assignee_id(id, full_name, employee_code),
+                        assigned_by:user_profiles!assigned_by(full_name)
+                    `, { count: 'exact' })
+                    .is('deleted_at', null)
+                    .order('created_at', { ascending: false });
+                
+                // Apply filters
+                if (this.filters.project) {
+                    query = query.eq('project_id', this.filters.project);
+                }
+                
+                if (this.filters.assignee === 'me') {
+                    query = query.eq('assignee_id', currentUser.id);
+                } else if (this.filters.assignee) {
+                    query = query.eq('assignee_id', this.filters.assignee);
+                }
+                
+                if (this.filters.status) {
+                    query = query.eq('status', this.filters.status);
+                }
+                
+                if (this.filters.priority) {
+                    query = query.eq('priority', this.filters.priority);
+                }
+                
+                if (this.searchQuery) {
+                    query = query.or(`title.ilike.%${this.searchQuery}%,description.ilike.%${this.searchQuery}%`);
+                }
+                
+                // User can only see tasks in their projects
+                if (currentUser.role === 'user') {
+                    const { data: userTasks } = await supabase
+                        .from('tasks')
+                        .select('project_id')
+                        .eq('assignee_id', currentUser.id)
+                        .is('deleted_at', null);
+                    
+                    const projectIds = [...new Set(userTasks?.map(t => t.project_id) || [])];
+                    if (projectIds.length > 0) {
+                        query = query.in('project_id', projectIds);
+                    } else {
+                        // No projects, no tasks
+                        this.tasks = [];
+                        this.totalItems = 0;
+                        this.totalPages = 0;
+                        this.loading = false;
+                        return;
+                    }
+                }
+                
+                // Pagination
+                const from = (this.currentPage - 1) * this.itemsPerPage;
+                const to = from + this.itemsPerPage - 1;
+                query = query.range(from, to);
+                
+                const { data: tasks, count, error } = await query;
+                
+                if (error) throw error;
+                
+                // Check for subtasks
+                for (const task of tasks || []) {
+                    const { count: subtaskCount } = await supabase
+                        .from('tasks')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('parent_task_id', task.id)
+                        .is('deleted_at', null);
+                    
+                    task.has_subtasks = subtaskCount > 0;
+                }
+                
+                this.tasks = tasks || [];
+                this.totalItems = count || 0;
+                this.totalPages = Math.ceil(this.totalItems / this.itemsPerPage);
+                
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+                showToast('Lỗi tải danh sách công việc', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        canUpdateStatus(task) {
+            // User can update their own task status (except to completed/rejected)
+            if (task.assignee_id === currentUser.id) {
+                return task.status !== 'completed' && task.status !== 'rejected';
+            }
+            // PM can update tasks in their projects
+            if (currentUser.role === 'pm' && task.project?.pm_id === currentUser.id) {
+                return true;
+            }
+            // Admin can update any task
+            return currentUser.role === 'admin';
+        },
+        
+        canEditTask(task) {
+            // PM can edit tasks in their projects
+            if (currentUser.role === 'pm' && task.project?.pm_id === currentUser.id) {
+                return true;
+            }
+            // Admin can edit any task
+            return currentUser.role === 'admin';
+        },
+        
+        viewTask(taskId) {
+            window.viewTaskDetail(taskId);
+        },
+        
+        getStatusColor(status) {
+            return STATUS_COLORS[status] || 'bg-gray-100 text-gray-800';
+        },
+        
+        getPriorityColor(priority) {
+            return PRIORITY_COLORS[priority] || 'bg-gray-100 text-gray-600';
+        },
+        
+        getDueDateColor(dueDate) {
+            if (!dueDate) return 'text-gray-500';
+            
+            const due = new Date(dueDate);
+            const today = new Date();
+            const daysLeft = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+            
+            if (daysLeft < 0) return 'text-red-600';
+            if (daysLeft <= 1) return 'text-orange-600';
+            if (daysLeft <= 3) return 'text-yellow-600';
+            return 'text-gray-500';
+        },
+        
+        getDaysLeft(dueDate) {
+            if (!dueDate) return '';
+            
+            const due = new Date(dueDate);
+            const today = new Date();
+            const daysLeft = Math.ceil((due - today) / (1000 * 60 * 60 * 24));
+            
+            if (daysLeft < 0) return `Quá hạn ${Math.abs(daysLeft)} ngày`;
+            if (daysLeft === 0) return 'Hôm nay';
+            if (daysLeft === 1) return 'Ngày mai';
+            return `Còn ${daysLeft} ngày`;
+        },
+        
+        prevPage() {
+            if (this.currentPage > 1) {
+                this.currentPage--;
+                this.loadTasks();
+            }
+        },
+        
+        nextPage() {
+            if (this.currentPage < this.totalPages) {
+                this.currentPage++;
+                this.loadTasks();
+            }
+        },
+        
+        goToPage(page) {
+            this.currentPage = page;
+            this.loadTasks();
+        },
+        
+        getPageNumbers() {
+            const pages = [];
+            const maxPages = 5;
+            let start = Math.max(1, this.currentPage - Math.floor(maxPages / 2));
+            let end = Math.min(this.totalPages, start + maxPages - 1);
+            
+            if (end - start < maxPages - 1) {
+                start = Math.max(1, end - maxPages + 1);
+            }
+            
+            for (let i = start; i <= end; i++) {
+                pages.push(i);
+            }
+            
+            return pages;
+        }
+    };
+}
+
+// View task detail
+async function viewTaskDetail(taskId) {
+    const modal = document.getElementById('taskDetailModal');
+    const content = document.getElementById('taskDetailContent');
+    
+    content.innerHTML = '<p class="text-center">Đang tải...</p>';
+    modal.classList.remove('hidden');
+    
+    try {
+        const { data: task, error } = await supabase
+            .from('tasks')
+            .select(`
+                *,
+                project:projects(name, code, customer:customers(name)),
+                assignee:user_profiles!assignee_id(full_name, employee_code),
+                assigned_by:user_profiles!assigned_by(full_name),
+                parent_task:tasks!parent_task_id(title)
+            `)
+            .eq('id', taskId)
+            .single();
+        
+        if (error) throw error;
+        
+        // Load subtasks if any
+        const { data: subtasks } = await supabase
+            .from('tasks')
+            .select('id, title, status, assignee:user_profiles!assignee_id(full_name)')
+            .eq('parent_task_id', taskId)
+            .is('deleted_at', null);
+        
+        // Load comments
+        const { data: comments } = await supabase
+            .from('comments')
+            .select('*, author:user_profiles!author_id(full_name, employee_code)')
+            .eq('entity_type', 'task')
+            .eq('entity_id', taskId)
+            .order('created_at', { ascending: false });
+        
+        content.innerHTML = `
+            <div class="space-y-6">
+                <!-- Task Info -->
+                <div>
+                    <h2 class="text-xl font-bold text-gray-900">${task.title}</h2>
+                    <div class="mt-2 flex items-center space-x-4">
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${STATUS_COLORS[task.status]}">
+                            ${CONFIG.TASK_STATUS_NAMES[task.status]}
+                        </span>
+                        <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${PRIORITY_COLORS[task.priority]}">
+                            ${CONFIG.TASK_PRIORITY_NAMES[task.priority]}
+                        </span>
+                        ${task.is_billable ? '<span class="text-xs text-green-600">Tính phí</span>' : '<span class="text-xs text-gray-500">Không tính phí</span>'}
+                    </div>
+                </div>
+                
+                <!-- Description -->
+                ${task.description ? `
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-700 mb-2">Mô tả</h3>
+                        <p class="text-gray-600 whitespace-pre-wrap">${task.description}</p>
+                    </div>
+                ` : ''}
+                
+                <!-- Details Grid -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500">Hợp đồng</p>
+                        <p class="font-medium">${task.project?.name || 'N/A'}</p>
+                        <p class="text-xs text-gray-500">${task.project?.customer?.name || ''}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Người thực hiện</p>
+                        <p class="font-medium">${task.assignee?.full_name || 'Chưa gán'}</p>
+                        <p class="text-xs text-gray-500">${task.assignee?.employee_code || ''}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Giờ ước tính / Thực tế</p>
+                        <p class="font-medium">${task.estimate_hours || 0}h / ${task.actual_hours || 0}h</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Hạn chót</p>
+                        <p class="font-medium">${task.due_date ? formatDate(task.due_date) : 'Không có'}</p>
+                    </div>
+                </div>
+                
+                <!-- Tags -->
+                ${task.tags && task.tags.length > 0 ? `
+                    <div>
+                        <p class="text-sm text-gray-500 mb-2">Tags</p>
+                        <div class="flex flex-wrap gap-2">
+                            ${task.tags.map(tag => `
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-gray-700">
+                                    ${tag}
+                                </span>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Subtasks -->
+                ${subtasks && subtasks.length > 0 ? `
+                    <div>
+                        <h3 class="text-sm font-medium text-gray-700 mb-2">Subtasks (${subtasks.length})</h3>
+                        <div class="space-y-2">
+                            ${subtasks.map(st => `
+                                <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                                    <div>
+                                        <p class="text-sm font-medium">${st.title}</p>
+                                        <p class="text-xs text-gray-500">${st.assignee?.full_name || 'Chưa gán'}</p>
+                                    </div>
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${STATUS_COLORS[st.status]}">
+                                        ${CONFIG.TASK_STATUS_NAMES[st.status]}
+                                    </span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <!-- Comments -->
+                <div>
+                    <h3 class="text-sm font-medium text-gray-700 mb-2">Bình luận (${comments?.length || 0})</h3>
+                    ${comments && comments.length > 0 ? `
+                        <div class="space-y-3">
+                            ${comments.map(c => `
+                                <div class="bg-gray-50 rounded-lg p-3">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <p class="text-sm font-medium">${c.author.full_name}</p>
+                                        <p class="text-xs text-gray-500">${formatDateTime(c.created_at)}</p>
+                                    </div>
+                                    <p class="text-sm text-gray-700">${c.body}</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : '<p class="text-sm text-gray-500">Chưa có bình luận</p>'}
+                </div>
+                
+                <!-- Metadata -->
+                <div class="text-xs text-gray-500 border-t pt-4">
+                    <p>Tạo bởi: ${task.assigned_by?.full_name || 'N/A'} - ${formatDateTime(task.created_at)}</p>
+                    <p>Cập nhật lần cuối: ${formatDateTime(task.updated_at)}</p>
+                </div>
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading task detail:', error);
+        content.innerHTML = '<p class="text-red-600">Lỗi tải thông tin công việc</p>';
+    }
+}
+
+// Close task detail modal
+function closeTaskDetailModal() {
+    document.getElementById('taskDetailModal').classList.add('hidden');
+}
+
+// Show create task modal
+async function showCreateTaskModal() {
+    document.getElementById('taskFormTitle').textContent = 'Tạo công việc mới';
+    document.getElementById('submitButtonText').textContent = 'Tạo công việc';
+    document.getElementById('taskForm').reset();
+    document.getElementById('taskId').value = '';
+    
+    await loadFormSelects();
+    
+    document.getElementById('taskFormModal').classList.remove('hidden');
+}
+
+// Show edit task modal
+async function showEditTaskModal(task) {
+    document.getElementById('taskFormTitle').textContent = 'Chỉnh sửa công việc';
+    document.getElementById('submitButtonText').textContent = 'Cập nhật';
+    
+    // Load form selects
+    await loadFormSelects();
+    
+    // Fill form with task data
+    document.getElementById('taskId').value = task.id;
+    document.getElementById('taskProjectId').value = task.project_id;
+    document.getElementById('taskTitle').value = task.title;
+    document.getElementById('taskDescription').value = task.description || '';
+    document.getElementById('taskAssigneeId').value = task.assignee_id || '';
+    document.getElementById('taskParentId').value = task.parent_task_id || '';
+    document.getElementById('taskPriority').value = task.priority;
+    document.getElementById('taskEstimateHours').value = task.estimate_hours || '';
+    document.getElementById('taskDueDate').value = task.due_date || '';
+    document.getElementById('taskIsBillable').checked = task.is_billable;
+    document.getElementById('taskTags').value = task.tags ? task.tags.join(', ') : '';
+    
+    document.getElementById('taskFormModal').classList.remove('hidden');
+}
+
+// Load form selects
+async function loadFormSelects() {
+    try {
+        // Load projects
+        const { data: projects } = await supabase
+            .from('projects')
+            .select('id, name, code')
+            .eq('status', 'active')
+            .is('deleted_at', null)
+            .order('name');
+        
+        const projectSelect = document.getElementById('taskProjectId');
+        projectSelect.innerHTML = '<option value="">Chọn hợp đồng</option>';
+        projects?.forEach(p => {
+            projectSelect.innerHTML += `<option value="${p.id}">${p.name} (${p.code})</option>`;
+        });
+        
+        // Load users
+        const { data: users } = await supabase
+            .from('user_profiles')
+            .select('id, full_name, employee_code')
+            .eq('is_active', true)
+            .order('full_name');
+        
+        const assigneeSelect = document.getElementById('taskAssigneeId');
+        assigneeSelect.innerHTML = '<option value="">Chưa gán</option>';
+        users?.forEach(u => {
+            assigneeSelect.innerHTML += `<option value="${u.id}">${u.full_name} (${u.employee_code})</option>`;
+        });
+        
+        // Load parent tasks (for subtasks)
+        const projectId = document.getElementById('taskProjectId').value;
+        if (projectId) {
+            const { data: tasks } = await supabase
+                .from('tasks')
+                .select('id, title')
+                .eq('project_id', projectId)
+                .is('parent_task_id', null)
+                .is('deleted_at', null)
+                .order('title');
+            
+            const parentSelect = document.getElementById('taskParentId');
+            parentSelect.innerHTML = '<option value="">Không có</option>';
+            tasks?.forEach(t => {
+                parentSelect.innerHTML += `<option value="${t.id}">${t.title}</option>`;
+            });
+        }
+    } catch (error) {
+        console.error('Error loading form selects:', error);
+    }
+}
+
+// Close task form modal
+function closeTaskFormModal() {
+    document.getElementById('taskFormModal').classList.add('hidden');
+}
+
+// Show update status modal
+function showUpdateStatusModal(task) {
+    document.getElementById('statusTaskId').value = task.id;
+    
+    const statusSelect = document.getElementById('newStatus');
+    statusSelect.innerHTML = '<option value="">Chọn trạng thái</option>';
+    
+    // User can only change to pending_approval
+    if (currentUser.id === task.assignee_id && currentUser.role === 'user') {
+        if (task.status === 'in_progress') {
+            statusSelect.innerHTML += '<option value="pending_approval">Chờ duyệt</option>';
+        }
+    } else if (['pm', 'admin'].includes(currentUser.role)) {
+        // PM/Admin can change to any status
+        Object.entries(CONFIG.TASK_STATUS).forEach(([key, value]) => {
+            if (value !== task.status) {
+                statusSelect.innerHTML += `<option value="${value}">${CONFIG.TASK_STATUS_NAMES[value]}</option>`;
+            }
+        });
+    }
+    
+    document.getElementById('updateStatusModal').classList.remove('hidden');
+}
+
+// Close update status modal
+function closeUpdateStatusModal() {
+    document.getElementById('updateStatusModal').classList.add('hidden');
+}
+
+// Handle task form submit
+document.getElementById('taskForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const taskId = document.getElementById('taskId').value;
+    const taskData = {
+        project_id: document.getElementById('taskProjectId').value,
+        title: document.getElementById('taskTitle').value,
+        description: document.getElementById('taskDescription').value || null,
+        assignee_id: document.getElementById('taskAssigneeId').value || null,
+        parent_task_id: document.getElementById('taskParentId').value || null,
+        priority: document.getElementById('taskPriority').value,
+        estimate_hours: parseFloat(document.getElementById('taskEstimateHours').value) || 0,
+        due_date: document.getElementById('taskDueDate').value || null,
+        is_billable: document.getElementById('taskIsBillable').checked,
+        tags: document.getElementById('taskTags').value ? 
+              document.getElementById('taskTags').value.split(',').map(t => t.trim()) : []
+    };
+    
+    try {
+        if (taskId) {
+            // Update existing task
+            const { error } = await supabase
+                .from('tasks')
+                .update(taskData)
+                .eq('id', taskId);
+            
+            if (error) throw error;
+            showToast('Cập nhật công việc thành công', 'success');
+        } else {
+            // Create new task
+            taskData.status = 'pending';
+            taskData.created_by = currentUser.id;
+            taskData.assigned_by = currentUser.id;
+            
+            const { error } = await supabase
+                .from('tasks')
+                .insert(taskData);
+            
+            if (error) throw error;
+            showToast('Tạo công việc thành công', 'success');
+        }
+        
+        closeTaskFormModal();
+        // Reload tasks
+        if (window.Alpine && window.Alpine.store) {
+            location.reload(); // Simple reload for now
+        }
+    } catch (error) {
+        console.error('Error saving task:', error);
+        showToast('Lỗi: ' + error.message, 'error');
+    }
+});
+
+// Handle update status form submit
+document.getElementById('updateStatusForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const taskId = document.getElementById('statusTaskId').value;
+    const newStatus = document.getElementById('newStatus').value;
+    
+    try {
+        const { error } = await supabase
+            .from('tasks')
+            .update({ 
+                status: newStatus,
+                completed_at: newStatus === 'completed' ? new Date().toISOString() : null
+            })
+            .eq('id', taskId);
+        
+        if (error) throw error;
+        
+        showToast('Cập nhật trạng thái thành công', 'success');
+        closeUpdateStatusModal();
+        location.reload(); // Simple reload for now
+    } catch (error) {
+        console.error('Error updating status:', error);
+        showToast('Lỗi: ' + error.message, 'error');
+    }
+});
+
+// Export tasks to Excel
+async function exportTasks() {
+    try {
+        // Get all tasks without pagination
+        let query = supabase
+            .from('tasks')
+            .select(`
+                *,
+                project:projects(name, code),
+                assignee:user_profiles!assignee_id(full_name, employee_code)
+            `)
+            .is('deleted_at', null)
+            .order('created_at', { ascending: false });
+        
+        // Apply same filters as current view
+        // (You can get these from Alpine component if needed)
+        
+        const { data: tasks, error } = await query;
+        
+        if (error) throw error;
+        
+        // Prepare data for export
+        const exportData = tasks.map(task => ({
+            'Mã HĐ': task.project?.code || '',
+            'Hợp đồng': task.project?.name || '',
+            'Tiêu đề': task.title,
+            'Mô tả': task.description || '',
+            'Người thực hiện': task.assignee?.full_name || 'Chưa gán',
+            'Mã NV': task.assignee?.employee_code || '',
+            'Trạng thái': CONFIG.TASK_STATUS_NAMES[task.status],
+            'Độ ưu tiên': CONFIG.TASK_PRIORITY_NAMES[task.priority],
+            'Giờ ước tính': task.estimate_hours || 0,
+            'Giờ thực tế': task.actual_hours || 0,
+            'Hạn chót': task.due_date ? formatDate(task.due_date) : '',
+            'Tính phí': task.is_billable ? 'Có' : 'Không',
+            'Tags': task.tags ? task.tags.join(', ') : '',
+            'Ngày tạo': formatDateTime(task.created_at),
+            'Cập nhật': formatDateTime(task.updated_at)
+        }));
+        
+        // Create workbook
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Tasks');
+        
+        // Save file
+        XLSX.writeFile(wb, `Tasks_${formatDate(new Date(), 'YYYYMMDD')}.xlsx`);
+        
+        showToast('Xuất file thành công', 'success');
+    } catch (error) {
+        console.error('Error exporting tasks:', error);
+        showToast('Lỗi xuất file: ' + error.message, 'error');
+    }
+}
+
+// Initialize when page loads
+if (typeof initTasks === 'function') {
+    // This will be called from main navigation
+}
+</script>
