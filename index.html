@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html lang="vi" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CRM/PM System - Quản lý Hợp đồng & Công việc</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="/favicon.png">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js for reactive components -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <link rel="stylesheet" href="https://unpkg.com/lucide-static/font/lucide.css">
+    
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- Chart.js for dashboard -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
+    
+    <!-- jsPDF for PDF export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+    
+    <!-- Custom Tailwind Config -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#3B82F6',
+                        secondary: '#6B7280',
+                        success: '#10B981',
+                        warning: '#F59E0B',
+                        danger: '#EF4444',
+                        info: '#6366F1'
+                    },
+                    animation: {
+                        'slide-in': 'slideIn 0.3s ease-out',
+                        'fade-in': 'fadeIn 0.3s ease-out'
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Custom Styles -->
+    <style>
+        @keyframes slideIn {
+            from { transform: translateX(-100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        
+        .loader {
+            border-top-color: #3B82F6;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        
+        /* Smooth transitions */
+        * {
+            transition: background-color 0.2s, border-color 0.2s, color 0.2s;
+        }
+        
+        /* Hide elements for unauthorized users */
+        .role-admin, .role-pm, .role-acc, .role-user {
+            display: none;
+        }
+        
+        body[data-role="admin"] .role-admin,
+        body[data-role="pm"] .role-pm,
+        body[data-role="acc"] .role-acc,
+        body[data-role="user"] .role-user {
+            display: block;
+        }
+        
+        body[data-role="admin"] .role-admin.flex,
+        body[data-role="pm"] .role-pm.flex,
+        body[data-role="acc"] .role-acc.flex,
+        body[data-role="user"] .role-user.flex {
+            display: flex;
+        }
+        
+        body[data-role="admin"] .role-admin.inline-block,
+        body[data-role="pm"] .role-pm.inline-block,
+        body[data-role="acc"] .role-acc.inline-block,
+        body[data-role="user"] .role-user.inline-block {
+            display: inline-block;
+        }
+        
+        /* Hide tabs for user role */
+        body[data-role="user"] .hide-for-user {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="h-full bg-gray-50" data-role="">
+    <!-- Loading Spinner (shown initially) -->
+    <div id="initial-loader" class="fixed inset-0 bg-white z-50 flex items-center justify-center">
+        <div class="text-center">
+            <div class="loader border-4 border-gray-200 rounded-full w-12 h-12 mb-4 mx-auto"></div>
+            <p class="text-gray-600">Đang tải ứng dụng...</p>
+        </div>
+    </div>
+    
+    <!-- Main App Container (hidden initially) -->
+    <div id="app" class="h-full hidden" x-data="appData">
+        <!-- Header -->
+        <header class="bg-white shadow-sm border-b fixed top-0 left-0 right-0 z-40">
+            <div class="flex items-center justify-between h-16 px-4">
+                <!-- Left: Logo & Menu Toggle -->
+                <div class="flex items-center space-x-4">
+                    <button @click="sidebarOpen = !sidebarOpen" class="md:hidden text-gray-600 hover:text-gray-900">
+                        <i class="lucide-menu w-6 h-6"></i>
+                    </button>
+                    <div class="flex items-center space-x-2">
+                        <i class="lucide-briefcase w-8 h-8 text-primary"></i>
+                        <h1 class="text-xl font-bold text-gray-900">CRM/PM System</h1>
+                    </div>
+                </div>
+                
+                <!-- Right: User Menu & Notifications -->
+                <div class="flex items-center space-x-4">
+                    <!-- Notifications -->
+                    <div class="relative" x-data="{ open: false }">
+                        <button @click="open = !open" class="relative p-2 text-gray-600 hover:text-gray-900">
+                            <i class="lucide-bell w-5 h-5"></i>
+                            <span id="notification-badge" class="hidden absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+                        </button>
+                        
+                        <!-- Notification Dropdown -->
+                        <div x-show="open" @click.away="open = false" x-transition
+                             class="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border">
+                            <div class="p-4 border-b">
+                                <h3 class="font-semibold">Thông báo</h3>
+                            </div>
+                            <div id="notification-list" class="max-h-96 overflow-y-auto">
+                                <p class="p-4 text-gray-500 text-center">Không có thông báo mới</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- User Menu -->
+                    <div class="relative" x-data="{ open: false }">
+                        <button @click="open = !open" class="flex items-center space-x-2 p-2 rounded-lg hover:bg-gray-100">
+                            <img id="user-avatar" src="/assets/images/default-avatar.png" alt="Avatar" 
+                                 class="w-8 h-8 rounded-full bg-gray-300">
+                            <span id="user-name" class="text-sm font-medium text-gray-700"></span>
+                            <i class="lucide-chevron-down w-4 h-4 text-gray-500"></i>
+                        </button>
+                        
+                        <!-- User Dropdown -->
+                        <div x-show="open" @click.away="open = false" x-transition
+                             class="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border">
+                            <div class="p-4 border-b">
+                                <p id="user-fullname" class="font-medium text-gray-900"></p>
+                                <p id="user-role" class="text-sm text-gray-500"></p>
+                            </div>
+                            <div class="p-2">
+                                <a href="#" onclick="showProfile()" class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100">
+                                    <i class="lucide-user w-4 h-4"></i>
+                                    <span>Thông tin cá nhân</span>
+                                </a>
+                                <a href="#" onclick="showChangePassword()" class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100">
+                                    <i class="lucide-key w-4 h-4"></i>
+                                    <span>Đổi mật khẩu</span>
+                                </a>
+                                <hr class="my-2">
+                                <a href="#" onclick="logout()" class="flex items-center space-x-2 px-3 py-2 rounded hover:bg-gray-100 text-red-600">
+                                    <i class="lucide-log-out w-4 h-4"></i>
+                                    <span>Đăng xuất</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Content Area -->
+        <div class="flex h-full pt-16">
+            <!-- Sidebar -->
+            <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+                   class="fixed md:relative md:translate-x-0 z-30 w-64 h-full bg-gray-900 text-white transition-transform duration-300">
+                <nav class="mt-8 px-4">
+                    <!-- Dashboard -->
+                    <a href="#dashboard" onclick="navigate('dashboard')" 
+                       class="menu-item flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-800 mb-1">
+                        <i class="lucide-layout-dashboard w-5 h-5"></i>
+                        <span>Dashboard</span>
+                    </a>
+                    
+                    <!-- Tasks -->
+                    <a href="#tasks" onclick="navigate('tasks')" 
+                       class="menu-item flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-800 mb-1">
+                        <i class="lucide-check-square w-5 h-5"></i>
+                        <span>Công việc</span>
+                    </a>
+                    
+                    <!-- Weekly Reports -->
+                    <a href="#weekly-reports" onclick="navigate('weekly-reports')" 
+                       class="menu-item flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-800 mb-1">
+                        <i class="lucide-file-text w-5 h-5"></i>
+                        <span>Báo cáo tuần</span>
+                    </a>
+                    
+                    <!-- Weekly Plans -->
+                    <a href="#weekly-plans" onclick="navigate('weekly-plans')" 
+                       class="menu-item flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-800 mb-1">
+                        <i class="lucide-calendar w-5 h-5"></i>
+                        <span>Kế hoạch tuần</span>
+                    </a>
+                    
+                    <!-- Projects (Hidden for User) -->
+                    <a href="#projects" onclick="navigate('projects')" 
+                       class="menu-item hide-for-user flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-800 mb-1">
+                        <i class="lucide-folder w-5 h-5"></i>
+                        <span>Hợp đồng</span>
+                    </a>
+                    
+                    <!-- Customers (Hidden for User) -->
+                    <a href="#customers" onclick="navigate('customers')" 
+                       class="menu-item hide-for-user flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-800 mb-1">
+                        <i class="lucide-users w-5 h-5"></i>
+                        <span>Khách hàng</span>
+                    </a>
+                    
+                    <!-- Payments -->
+                    <a href="#payments" onclick="navigate('payments')" 
+                       class="menu-item flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-800 mb-1">
+                        <i class="lucide-credit-card w-5 h-5"></i>
+                        <span>Thanh toán</span>
+                    </a>
+                    
+                    <!-- Audit Log (Hidden for User) -->
+                    <a href="#audit" onclick="navigate('audit')" 
+                       class="menu-item hide-for-user flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-gray-800 mb-1">
+                        <i class="lucide-shield w-5 h-5"></i>
+                        <span>Audit Log</span>
+                    </a>
+                </nav>
+            </aside>
+            
+            <!-- Overlay for mobile sidebar -->
+            <div x-show="sidebarOpen" @click="sidebarOpen = false"
+                 class="fixed inset-0 bg-black bg-opacity-50 z-20 md:hidden"></div>
+            
+            <!-- Main Content -->
+            <main class="flex-1 overflow-y-auto">
+                <div id="main-content" class="p-6">
+                    <!-- Content will be loaded here dynamically -->
+                </div>
+            </main>
+        </div>
+    </div>
+    
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-20 right-4 z-50 space-y-2"></div>
+    
+    <!-- Modal Container -->
+    <div id="modal-container"></div>
+    
+    <!-- Scripts -->
+    <script src="config.js"></script>
+    <script src="auth.js"></script>
+    
+    <!-- Alpine.js App Data -->
+    <script>
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('appData', () => ({
+                sidebarOpen: false,
+                currentUser: null,
+                notifications: [],
+                
+                init() {
+                    // Check auth on init
+                    this.checkAuth();
+                }
+            }));
+        });
+    </script>
+    
+    <!-- Main App Logic -->
+    <script>
+        // Global variables
+        let currentUser = null;
+        let currentPage = 'dashboard';
+        
+        // Check authentication
+        async function checkAuth() {
+            const session = await authManager.getSession();
+            
+            if (!session) {
+                window.location.href = 'login.html';
+                return;
+            }
+            
+            // Load user profile
+            currentUser = await authManager.getCurrentUser();
+            
+            if (currentUser) {
+                // Set user role for CSS
+                document.body.setAttribute('data-role', currentUser.role);
+                
+                // Update UI with user info
+                document.getElementById('user-name').textContent = currentUser.username;
+                document.getElementById('user-fullname').textContent = currentUser.full_name;
+                document.getElementById('user-role').textContent = CONFIG.ROLE_NAMES[currentUser.role];
+                
+                // Show app
+                document.getElementById('initial-loader').classList.add('hidden');
+                document.getElementById('app').classList.remove('hidden');
+                
+                // Load initial page
+                navigate('dashboard');
+                
+                // Setup realtime subscriptions
+                setupRealtimeSubscriptions();
+            }
+        }
+        
+        // Navigation
+        function navigate(page) {
+            currentPage = page;
+            
+            // Update active menu
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.classList.remove('bg-gray-800');
+            });
+            
+            const activeItem = document.querySelector(`.menu-item[href="#${page}"]`);
+            if (activeItem) {
+                activeItem.classList.add('bg-gray-800');
+            }
+            
+            // Load page content
+            loadPage(page);
+        }
+        
+        // Load page content
+        async function loadPage(page) {
+            const contentDiv = document.getElementById('main-content');
+            
+            // Show loading
+            contentDiv.innerHTML = `
+                <div class="flex items-center justify-center h-64">
+                    <div class="text-center">
+                        <div class="loader border-4 border-gray-200 rounded-full w-12 h-12 mb-4 mx-auto"></div>
+                        <p class="text-gray-600">Đang tải...</p>
+                    </div>
+                </div>
+            `;
+            
+            try {
+                // Load page HTML
+                const response = await fetch(`${page}.html`);
+                if (response.ok) {
+                    const html = await response.text();
+                    contentDiv.innerHTML = html;
+                    
+                    // Initialize page-specific JavaScript
+                    if (window[`init${page.charAt(0).toUpperCase() + page.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`]) {
+                        window[`init${page.charAt(0).toUpperCase() + page.slice(1).replace(/-([a-z])/g, (g) => g[1].toUpperCase())}`]();
+                    }
+                } else {
+                    throw new Error('Page not found');
+                }
+            } catch (error) {
+                contentDiv.innerHTML = `
+                    <div class="text-center py-12">
+                        <i class="lucide-alert-circle w-16 h-16 text-red-500 mx-auto mb-4"></i>
+                        <h2 class="text-2xl font-bold text-gray-900 mb-2">Lỗi tải trang</h2>
+                        <p class="text-gray-600">${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Show toast notification
+        function showToast(message, type = 'info') {
+            const toastContainer = document.getElementById('toast-container');
+            const toastId = `toast-${Date.now()}`;
+            
+            const toastHTML = `
+                <div id="${toastId}" class="toast animate-fade-in bg-white rounded-lg shadow-lg border p-4 min-w-[300px]">
+                    <div class="flex items-start space-x-3">
+                        <i class="lucide-${type === 'success' ? 'check-circle' : type === 'error' ? 'x-circle' : 'info'} 
+                           w-5 h-5 text-${type === 'success' ? 'green' : type === 'error' ? 'red' : 'blue'}-500"></i>
+                        <div class="flex-1">
+                            <p class="text-gray-800">${message}</p>
+                        </div>
+                        <button onclick="document.getElementById('${toastId}').remove()" 
+                                class="text-gray-400 hover:text-gray-600">
+                            <i class="lucide-x w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            toastContainer.insertAdjacentHTML('beforeend', toastHTML);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                const toast = document.getElementById(toastId);
+                if (toast) toast.remove();
+            }, 5000);
+        }
+        
+        // Setup realtime subscriptions
+        function setupRealtimeSubscriptions() {
+            if (!CONFIG.FEATURES.ENABLE_REALTIME) return;
+            
+            // Subscribe to notifications
+            supabase
+                .channel('notifications')
+                .on('postgres_changes', {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'notifications',
+                    filter: `user_id=eq.${currentUser.id}`
+                }, (payload) => {
+                    handleNewNotification(payload.new);
+                })
+                .subscribe();
+        }
+        
+        // Handle new notification
+        function handleNewNotification(notification) {
+            // Show badge
+            document.getElementById('notification-badge').classList.remove('hidden');
+            
+            // Show toast
+            showToast(notification.message, 'info');
+            
+            // Add to notification list
+            updateNotificationList();
+        }
+        
+        // Update notification list
+        async function updateNotificationList() {
+            const { data: notifications } = await supabase
+                .from('notifications')
+                .select('*')
+                .eq('user_id', currentUser.id)
+                .is('read_at', null)
+                .order('created_at', { ascending: false })
+                .limit(10);
+            
+            const listDiv = document.getElementById('notification-list');
+            
+            if (notifications && notifications.length > 0) {
+                listDiv.innerHTML = notifications.map(n => `
+                    <div class="p-4 border-b hover:bg-gray-50 cursor-pointer" onclick="markNotificationRead('${n.id}')">
+                        <p class="font-medium text-sm">${n.title}</p>
+                        <p class="text-sm text-gray-600">${n.message}</p>
+                        <p class="text-xs text-gray-400 mt-1">${formatDateTime(n.created_at)}</p>
+                    </div>
+                `).join('');
+            } else {
+                listDiv.innerHTML = '<p class="p-4 text-gray-500 text-center">Không có thông báo mới</p>';
+            }
+        }
+        
+        // Mark notification as read
+        async function markNotificationRead(notificationId) {
+            await supabase
+                .from('notifications')
+                .update({ read_at: new Date().toISOString() })
+                .eq('id', notificationId);
+            
+            updateNotificationList();
+        }
+        
+        // Logout
+        async function logout() {
+            if (confirm('Bạn có chắc chắn muốn đăng xuất?')) {
+                await authManager.logout();
+            }
+        }
+        
+        // Show profile modal
+        function showProfile() {
+            // Implementation for profile modal
+            showToast('Tính năng đang phát triển', 'info');
+        }
+        
+        // Show change password modal
+        function showChangePassword() {
+            // Implementation for change password modal
+            showToast('Tính năng đang phát triển', 'info');
+        }
+        
+        // Initialize app
+        window.addEventListener('DOMContentLoaded', () => {
+            checkAuth();
+        });
+    </script>
+</body>
+</html>
